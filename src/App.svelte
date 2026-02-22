@@ -273,7 +273,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Anybody:wght@300;400;500&display=swap" rel="stylesheet" />
 </svelte:head>
 
-<main class:finished={isFinished} class:running={timerState === "running"} class:paused={timerState === "paused"}>
+<main data-tauri-drag-region class:finished={isFinished} class:running={timerState === "running"} class:paused={timerState === "paused"}>
   {#if showSettings}
     <!-- Settings view -->
     <div class="texture"></div>
@@ -365,8 +365,8 @@
     <div class="texture"></div>
 
     <!-- Timer face -->
-    <div class="timer-face">
-      <svg class="progress-ring" viewBox="0 0 300 300">
+    <div class="timer-face" data-tauri-drag-region>
+      <svg class="progress-ring" viewBox="0 0 300 300" data-tauri-drag-region>
         <!-- Track -->
         <circle
           cx="150" cy="150" r={RADIUS}
@@ -406,10 +406,10 @@
       </svg>
 
       <!-- Time display -->
-      <div class="time-display">
-        <span class="digits">{formatMinutes(remainingSecs)}</span>
-        <span class="separator">:</span>
-        <span class="digits">{formatSeconds(remainingSecs)}</span>
+      <div class="time-display" data-tauri-drag-region>
+        <span class="digits" data-tauri-drag-region>{formatMinutes(remainingSecs)}</span>
+        <span class="separator" data-tauri-drag-region>:</span>
+        <span class="digits" data-tauri-drag-region>{formatSeconds(remainingSecs)}</span>
       </div>
 
       {#if isFinished}
