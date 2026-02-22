@@ -1,3 +1,5 @@
 
-- [ ] Allow resizing of window to resize timer and buttons.
-- 
+- [ ] Add Shift + Arrow Keys for minute increments
+- [ ] Have time be saved and timer paused when the app is closed. 
+- [ ] Toggleable mini-view? View in Windows Dashboard?
+- [ ] Adjust so I can click anywhere on the window that's not a button and drag the window.

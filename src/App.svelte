@@ -23,15 +23,20 @@
   let showSettings = $state(false);
   let settingsDurationMin = $state(5);
   let settingsIncrementMin = $state(5);
+  let settingsSecondaryIncrementMin = $state(1);
   let incrementSecs = $state(300);
+  let secondaryIncrementSecs = $state(60);
 
   let incrementLabel = $derived(Math.round(incrementSecs / 60) + " min");
+  let secondaryIncrementLabel = $derived(Math.round(secondaryIncrementSecs / 60) + " min");
 
   async function loadSettings() {
-    const s = await invoke<{ default_duration_secs: number; default_increment_secs: number }>("get_settings");
+    const s = await invoke<{ default_duration_secs: number; default_increment_secs: number; secondary_increment_secs: number }>("get_settings");
     settingsDurationMin = Math.round(s.default_duration_secs / 60);
     settingsIncrementMin = Math.round(s.default_increment_secs / 60);
+    settingsSecondaryIncrementMin = Math.round(s.secondary_increment_secs / 60);
     incrementSecs = s.default_increment_secs;
+    secondaryIncrementSecs = s.secondary_increment_secs;
   }
 
   async function openSettings() {
@@ -46,12 +51,15 @@
   async function saveSettings() {
     const durationMin = Math.max(1, Math.min(180, settingsDurationMin));
     const incrementMin = Math.max(1, Math.min(60, settingsIncrementMin));
+    const secondaryIncrementMin = Math.max(1, Math.min(60, settingsSecondaryIncrementMin));
     const newSettings = {
       default_duration_secs: durationMin * 60,
       default_increment_secs: incrementMin * 60,
+      secondary_increment_secs: secondaryIncrementMin * 60,
     };
     await invoke("save_settings", { newSettings });
     incrementSecs = newSettings.default_increment_secs;
+    secondaryIncrementSecs = newSettings.secondary_increment_secs;
     showSettings = false;
     if (timerState === "idle") {
       await invoke("create_timer", { durationSecs: newSettings.default_duration_secs });
@@ -122,6 +130,7 @@
     if (prevState !== "finished" && status.state === "finished") {
       playAlertSound();
       sendCompletionNotification();
+      getCurrentWindow().requestUserAttention("critical");
     }
     prevState = status.state;
 
@@ -161,6 +170,7 @@
 
   async function handleReset() {
     await invoke("reset_timer");
+    getCurrentWindow().requestUserAttention(null);
     await fetchStatus();
   }
 
@@ -172,6 +182,17 @@
 
   async function handleRemoveTime() {
     await invoke("remove_time");
+    await fetchStatus();
+  }
+
+  async function handleAddTimeSecondary() {
+    await invoke("add_time_secondary");
+    totalDuration += secondaryIncrementSecs;
+    await fetchStatus();
+  }
+
+  async function handleRemoveTimeSecondary() {
+    await invoke("remove_time_secondary");
     await fetchStatus();
   }
 
@@ -195,17 +216,35 @@
         break;
       case "+":
       case "=":
-      case "ArrowRight":
         if (timerState === "running" || timerState === "paused") {
           event.preventDefault();
           handleAddTime();
         }
         break;
+      case "ArrowRight":
+        if (timerState === "running" || timerState === "paused") {
+          event.preventDefault();
+          if (event.ctrlKey) {
+            handleAddTimeSecondary();
+          } else {
+            handleAddTime();
+          }
+        }
+        break;
       case "-":
-      case "ArrowLeft":
         if (timerState === "running" || timerState === "paused") {
           event.preventDefault();
           handleRemoveTime();
+        }
+        break;
+      case "ArrowLeft":
+        if (timerState === "running" || timerState === "paused") {
+          event.preventDefault();
+          if (event.ctrlKey) {
+            handleRemoveTimeSecondary();
+          } else {
+            handleRemoveTime();
+          }
         }
         break;
       case "Escape":
@@ -272,6 +311,21 @@
             min="1"
             max="60"
             bind:value={settingsIncrementMin}
+            class="settings-input"
+          />
+          <span class="settings-unit">min</span>
+        </div>
+      </div>
+
+      <div class="settings-field">
+        <label class="settings-label" for="secondary-increment">Secondary increment</label>
+        <div class="settings-input-row">
+          <input
+            id="secondary-increment"
+            type="number"
+            min="1"
+            max="60"
+            bind:value={settingsSecondaryIncrementMin}
             class="settings-input"
           />
           <span class="settings-unit">min</span>
@@ -424,6 +478,34 @@
         </button>
       </div>
 
+      <!-- Secondary time adjust -->
+      <div class="adjust-row secondary">
+        <button
+          class="adjust-btn secondary"
+          onclick={handleRemoveTimeSecondary}
+          disabled={timerState === "idle" || isFinished}
+          aria-label="Remove time (secondary)"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <line x1="2" y1="7" x2="12" y2="7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span>{secondaryIncrementLabel}</span>
+        </button>
+
+        <button
+          class="adjust-btn secondary"
+          onclick={handleAddTimeSecondary}
+          disabled={timerState === "idle" || isFinished}
+          aria-label="Add time (secondary)"
+        >
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <line x1="7" y1="2" x2="7" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <line x1="2" y1="7" x2="12" y2="7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span>{secondaryIncrementLabel}</span>
+        </button>
+      </div>
+
       <!-- Reset -->
       {#if timerState !== "idle" && !isFinished}
         <button class="reset-btn" onclick={handleReset}>
@@ -477,7 +559,7 @@
     align-items: center;
     justify-content: center;
     min-height: 100vh;
-    padding: 2rem 1.5rem;
+    padding: clamp(0.5rem, 3vmin, 2rem) clamp(0.25rem, 2vmin, 1.5rem);
     position: relative;
     transition: background-color 0.6s ease;
   }
@@ -498,14 +580,16 @@
   /* Timer face */
   .timer-face {
     position: relative;
-    width: 300px;
-    height: 300px;
+    width: clamp(80px, 75vmin, 300px);
+    height: clamp(80px, 75vmin, 300px);
+    max-height: calc(100vh - 5rem);
+    max-width: calc(100vh - 5rem);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-direction: column;
     z-index: 1;
-    margin-bottom: 2.5rem;
+    margin-bottom: clamp(0.5rem, 4vmin, 2.5rem);
   }
 
   .progress-ring {
@@ -541,7 +625,7 @@
 
   .digits {
     font-family: "DM Serif Display", serif;
-    font-size: 4.5rem;
+    font-size: clamp(1.2rem, 18vmin, 4.5rem);
     color: var(--charcoal);
     letter-spacing: -0.02em;
     transition: color 0.4s ease;
@@ -549,7 +633,7 @@
 
   .separator {
     font-family: "DM Serif Display", serif;
-    font-size: 4rem;
+    font-size: clamp(1rem, 16vmin, 4rem);
     color: var(--stone);
     margin: 0 0.1rem;
     opacity: 0.6;
@@ -604,7 +688,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 1.25rem;
+    gap: clamp(0.5rem, 3vmin, 1.25rem);
     z-index: 1;
   }
 
@@ -620,20 +704,25 @@
     flex-direction: column;
     align-items: center;
     gap: 0.3rem;
-    padding: 0.6rem 0.8rem;
+    padding: clamp(0.3rem, 2.4vmin, 0.6rem) clamp(0.4rem, 3.2vmin, 0.8rem);
     border: 1px solid #e0dbd3;
     border-radius: 12px;
     background: white;
     color: var(--stone);
     cursor: pointer;
     font-family: "Anybody", sans-serif;
-    font-size: 0.7rem;
+    font-size: clamp(0.55rem, 2.8vmin, 0.7rem);
     font-weight: 500;
     letter-spacing: 0.05em;
     text-transform: uppercase;
     box-shadow: var(--shadow-btn);
     transition: all 0.2s ease;
-    min-width: 56px;
+    min-width: clamp(40px, 14vmin, 56px);
+  }
+
+  .adjust-btn svg {
+    color: var(--charcoal);
+    opacity: 0.7;
   }
 
   .adjust-btn span {
@@ -657,10 +746,26 @@
     cursor: not-allowed;
   }
 
+  .adjust-row.secondary {
+    gap: 1rem;
+  }
+
+  .adjust-btn.secondary {
+    padding: clamp(0.2rem, 1.8vmin, 0.4rem) clamp(0.3rem, 2.4vmin, 0.6rem);
+    font-size: clamp(0.5rem, 2.4vmin, 0.6rem);
+    min-width: clamp(36px, 12vmin, 48px);
+    opacity: 0.6;
+    border-color: #e8e4dc;
+  }
+
+  .adjust-btn.secondary:hover:not(:disabled) {
+    opacity: 1;
+  }
+
   /* Primary button */
   .primary-btn {
-    width: 64px;
-    height: 64px;
+    width: clamp(32px, 16vmin, 64px);
+    height: clamp(32px, 16vmin, 64px);
     border-radius: 50%;
     border: none;
     background: linear-gradient(145deg, var(--brass-glow), var(--brass-dark));
@@ -901,5 +1006,20 @@
   .settings-save-btn:active {
     transform: translateY(0);
     box-shadow: 0 1px 4px rgba(196, 162, 101, 0.3);
+  }
+
+  /* Compact tier and below: hide secondary controls and tick marks */
+  @media (max-width: 349px), (max-height: 399px) {
+    .progress-ring line { display: none; }
+    .adjust-row .adjust-btn { display: none; }
+    .adjust-row.secondary { display: none; }
+    .reset-btn { display: none; }
+    .pin-btn { display: none; }
+    .settings-btn { display: none; }
+  }
+
+  /* Tiny tier: also hide the progress ring entirely */
+  @media (max-width: 179px), (max-height: 179px) {
+    .progress-ring { display: none; }
   }
 </style>

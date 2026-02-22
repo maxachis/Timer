@@ -41,6 +41,11 @@ The application SHALL launch a single window with appropriate defaults for a tim
 - **AND** the window size SHALL be 400x600 pixels
 - **AND** the window SHALL be resizable
 
+#### Scenario: Minimum window size
+- **WHEN** the user resizes the window
+- **THEN** the window SHALL NOT shrink below 100x100 pixels
+- **AND** `minWidth` SHALL be set to 100 and `minHeight` SHALL be set to 100 in the window configuration
+
 ### Requirement: Tauri capabilities and permissions
 The application SHALL declare a default capability granting core permissions to the main window.
 
