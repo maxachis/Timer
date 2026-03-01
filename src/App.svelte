@@ -1,5 +1,6 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
+  import { LogicalSize } from "@tauri-apps/api/dpi";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
     isPermissionGranted,
@@ -26,6 +27,8 @@
   let settingsSecondaryIncrementMin = $state(1);
   let incrementSecs = $state(300);
   let secondaryIncrementSecs = $state(60);
+  const MINUTE_INCREMENT_SECS = 60;
+  const MIN_WINDOW_SIZE = 100;
 
   let incrementLabel = $derived(Math.round(incrementSecs / 60) + " min");
   let secondaryIncrementLabel = $derived(Math.round(secondaryIncrementSecs / 60) + " min");
@@ -70,6 +73,12 @@
   async function toggleAlwaysOnTop() {
     alwaysOnTop = !alwaysOnTop;
     await getCurrentWindow().setAlwaysOnTop(alwaysOnTop);
+  }
+
+  async function shrinkToMinimumSize() {
+    await getCurrentWindow().setSize(
+      new LogicalSize(MIN_WINDOW_SIZE, MIN_WINDOW_SIZE),
+    );
   }
 
   // Track total duration for the progress ring
@@ -196,6 +205,17 @@
     await fetchStatus();
   }
 
+  async function handleAddTimeMinute() {
+    await invoke("add_time_custom", { seconds: MINUTE_INCREMENT_SECS });
+    totalDuration += MINUTE_INCREMENT_SECS;
+    await fetchStatus();
+  }
+
+  async function handleRemoveTimeMinute() {
+    await invoke("remove_time_custom", { seconds: MINUTE_INCREMENT_SECS });
+    await fetchStatus();
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (showSettings) return;
     switch (event.key) {
@@ -226,6 +246,8 @@
           event.preventDefault();
           if (event.ctrlKey) {
             handleAddTimeSecondary();
+          } else if (event.shiftKey) {
+            handleAddTimeMinute();
           } else {
             handleAddTime();
           }
@@ -242,6 +264,8 @@
           event.preventDefault();
           if (event.ctrlKey) {
             handleRemoveTimeSecondary();
+          } else if (event.shiftKey) {
+            handleRemoveTimeMinute();
           } else {
             handleRemoveTime();
           }
@@ -359,6 +383,11 @@
         <circle cx="8" cy="8" r="2" />
         <path d="M13.5 8a5.5 5.5 0 0 0-.1-.8l1.3-1-.7-1.2-1.5.5a5.5 5.5 0 0 0-1.2-.7L11 3.3h-1.4l-.3 1.5a5.5 5.5 0 0 0-1.2.7l-1.5-.5-.7 1.2 1.3 1a5.5 5.5 0 0 0 0 1.6l-1.3 1 .7 1.2 1.5-.5a5.5 5.5 0 0 0 1.2.7l.3 1.5H11l.3-1.5a5.5 5.5 0 0 0 1.2-.7l1.5.5.7-1.2-1.3-1a5.5 5.5 0 0 0 .1-.8z" />
       </svg>
+    </button>
+
+    <!-- Mini mode button -->
+    <button class="mini-btn" onclick={shrinkToMinimumSize} aria-label="Shrink to minimum size">
+      Mini
     </button>
 
     <!-- Subtle texture overlay -->
@@ -880,6 +909,39 @@
     transform: translateY(-1px);
   }
 
+  /* Mini mode button */
+  .mini-btn {
+    position: absolute;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    height: 32px;
+    padding: 0 0.65rem;
+    border: 1px solid #e0dbd3;
+    border-radius: 8px;
+    background: white;
+    color: var(--stone);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-btn);
+    transition: all 0.2s ease;
+    opacity: 0.65;
+    font-family: "Anybody", sans-serif;
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .mini-btn:hover {
+    opacity: 1;
+    box-shadow: var(--shadow-btn-hover);
+    transform: translateX(-50%) translateY(-1px);
+  }
+
   /* Settings back button */
   .settings-back-btn {
     position: absolute;
@@ -1015,6 +1077,7 @@
     .adjust-row.secondary { display: none; }
     .reset-btn { display: none; }
     .pin-btn { display: none; }
+    .mini-btn { display: none; }
     .settings-btn { display: none; }
   }
 
@@ -1022,4 +1085,5 @@
   @media (max-width: 179px), (max-height: 179px) {
     .progress-ring { display: none; }
   }
+
 </style>

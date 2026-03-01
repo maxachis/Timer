@@ -120,6 +120,16 @@ fn remove_time_secondary(timer: tauri::State<Mutex<CountdownTimer>>, settings: t
 }
 
 #[tauri::command]
+fn add_time_custom(timer: tauri::State<Mutex<CountdownTimer>>, seconds: u64) {
+    timer.lock().unwrap().add_time(Some(std::time::Duration::from_secs(seconds)));
+}
+
+#[tauri::command]
+fn remove_time_custom(timer: tauri::State<Mutex<CountdownTimer>>, seconds: u64) {
+    timer.lock().unwrap().remove_time(Some(std::time::Duration::from_secs(seconds)));
+}
+
+#[tauri::command]
 fn get_settings(settings: tauri::State<Mutex<AppSettings>>) -> AppSettings {
     settings.lock().unwrap().clone()
 }
@@ -180,6 +190,8 @@ pub fn run() {
             remove_time,
             add_time_secondary,
             remove_time_secondary,
+            add_time_custom,
+            remove_time_custom,
             create_timer,
             get_settings,
             save_settings,
