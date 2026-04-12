@@ -12,6 +12,17 @@
     remaining_secs: number;
     state: string;
     is_finished: boolean;
+    active_index: number;
+    active_name: string;
+    timer_count: number;
+  }
+
+  interface TimerListEntry {
+    index: number;
+    name: string;
+    state: string;
+    remaining_secs: number;
+    is_active: boolean;
   }
 
   let remainingSecs = $state(300);
@@ -30,8 +41,29 @@
   const MINUTE_INCREMENT_SECS = 60;
   const MIN_WINDOW_SIZE = 100;
 
+  // Multi-timer state
+  let activeIndex = $state(0);
+  let activeName = $state("");
+  let timerCount = $state(1);
+  let timerList: TimerListEntry[] = $state([]);
+  let toastMessage = $state("");
+  let toastTimeout: ReturnType<typeof setTimeout> | null = $state(null);
+  let editingName = $state(false);
+  let editNameValue = $state("");
+
+  let hasMultipleTimers = $derived(timerCount > 1);
+
   let incrementLabel = $derived(Math.round(incrementSecs / 60) + " min");
   let secondaryIncrementLabel = $derived(Math.round(secondaryIncrementSecs / 60) + " min");
+
+  function showToast(msg: string) {
+    toastMessage = msg;
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => {
+      toastMessage = "";
+      toastTimeout = null;
+    }, 3000);
+  }
 
   async function loadSettings() {
     const s = await invoke<{ default_duration_secs: number; default_increment_secs: number; secondary_increment_secs: number }>("get_settings");
@@ -124,7 +156,7 @@
     if (permitted) {
       sendNotification({
         title: "Timer Complete",
-        body: "Your timer has finished.",
+        body: activeName ? `"${activeName}" has finished.` : "Your timer has finished.",
       });
     }
   }
@@ -134,6 +166,9 @@
     remainingSecs = status.remaining_secs;
     timerState = status.state;
     isFinished = status.is_finished;
+    activeIndex = status.active_index;
+    activeName = status.active_name;
+    timerCount = status.timer_count;
 
     // Detect transition to finished state
     if (prevState !== "finished" && status.state === "finished") {
@@ -152,6 +187,10 @@
       clearInterval(pollInterval);
       pollInterval = null;
     }
+  }
+
+  async function fetchTimerList() {
+    timerList = await invoke<TimerListEntry[]>("get_timer_list");
   }
 
   function startPolling() {
@@ -216,8 +255,86 @@
     await fetchStatus();
   }
 
+  // Multi-timer actions
+  async function handleAddTimer() {
+    try {
+      const defaultName = `Timer ${timerCount + 1}`;
+      await invoke("add_new_timer", { name: defaultName });
+      await fetchStatus();
+      await fetchTimerList();
+    } catch (e) {
+      showToast("3 timer limit — remove one first");
+    }
+  }
+
+  async function handleRemoveTimer(index: number) {
+    try {
+      await invoke("remove_existing_timer", { index });
+      await fetchStatus();
+      await fetchTimerList();
+    } catch (_e) {
+      // Can't remove last timer
+    }
+  }
+
+  async function handleSwitchTimer(index: number) {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+    await invoke("switch_timer", { index });
+    await fetchStatus();
+    await fetchTimerList();
+  }
+
+  async function handleSwitchNext() {
+    if (timerCount <= 1) return;
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+    await invoke("switch_timer_next");
+    await fetchStatus();
+    await fetchTimerList();
+  }
+
+  async function handleSwitchPrev() {
+    if (timerCount <= 1) return;
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
+    }
+    await invoke("switch_timer_prev");
+    await fetchStatus();
+    await fetchTimerList();
+  }
+
+  function startEditName() {
+    editNameValue = activeName;
+    editingName = true;
+  }
+
+  async function finishEditName() {
+    editingName = false;
+    const trimmed = editNameValue.trim();
+    if (trimmed !== activeName) {
+      await invoke("rename_timer", { index: activeIndex, name: trimmed });
+      await fetchStatus();
+      await fetchTimerList();
+    }
+  }
+
+  function handleNameKeydown(event: KeyboardEvent) {
+    if (event.key === "Enter") {
+      (event.target as HTMLInputElement)?.blur();
+    } else if (event.key === "Escape") {
+      editingName = false;
+    }
+  }
+
   function handleKeydown(event: KeyboardEvent) {
     if (showSettings) return;
+    if (editingName) return;
     switch (event.key) {
       case " ":
         event.preventDefault();
@@ -282,11 +399,26 @@
         event.preventDefault();
         toggleAlwaysOnTop();
         break;
+      case "e":
+      case "E":
+        if (hasMultipleTimers) {
+          event.preventDefault();
+          handleSwitchNext();
+        }
+        break;
+      case "q":
+      case "Q":
+        if (hasMultipleTimers) {
+          event.preventDefault();
+          handleSwitchPrev();
+        }
+        break;
     }
   }
 
   fetchStatus();
   loadSettings();
+  fetchTimerList();
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
@@ -390,6 +522,14 @@
       Mini
     </button>
 
+    <!-- Add timer button -->
+    <button class="add-timer-btn" onclick={handleAddTimer} aria-label="Add timer">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <line x1="6" y1="1" x2="6" y2="11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+
     <!-- Subtle texture overlay -->
     <div class="texture"></div>
 
@@ -445,6 +585,45 @@
         <div class="finished-label">complete</div>
       {:else if timerState === "paused"}
         <div class="state-label">paused</div>
+      {/if}
+
+      <!-- Timer name (only when multiple timers) -->
+      {#if hasMultipleTimers}
+        <div class="timer-name-area">
+          {#if editingName}
+            <input
+              class="timer-name-input"
+              type="text"
+              bind:value={editNameValue}
+              onblur={finishEditName}
+              onkeydown={handleNameKeydown}
+              autofocus
+            />
+          {:else}
+            <button class="timer-name-label" onclick={startEditName} aria-label="Rename timer">
+              {activeName || `Timer ${activeIndex + 1}`}
+            </button>
+          {/if}
+        </div>
+
+        <!-- Pagination dots -->
+        <div class="timer-dots">
+          {#each timerList as entry}
+            <button
+              class="timer-dot"
+              class:active={entry.is_active}
+              onclick={() => handleSwitchTimer(entry.index)}
+              aria-label={`Switch to ${entry.name || "Timer " + (entry.index + 1)}`}
+            ></button>
+          {/each}
+        </div>
+      {/if}
+
+      <!-- Compact timer label (shown only in compact/tiny view when multiple timers) -->
+      {#if hasMultipleTimers}
+        <div class="compact-timer-label">
+          {activeName || `T${activeIndex + 1}`}
+        </div>
       {/if}
     </div>
 
@@ -535,6 +714,13 @@
         </button>
       </div>
 
+      <!-- Remove timer (only when multiple) -->
+      {#if hasMultipleTimers}
+        <button class="remove-timer-btn" onclick={() => handleRemoveTimer(activeIndex)}>
+          Remove timer
+        </button>
+      {/if}
+
       <!-- Reset -->
       {#if timerState !== "idle" && !isFinished}
         <button class="reset-btn" onclick={handleReset}>
@@ -542,6 +728,11 @@
         </button>
       {/if}
     </div>
+  {/if}
+
+  <!-- Toast notification -->
+  {#if toastMessage}
+    <div class="toast">{toastMessage}</div>
   {/if}
 </main>
 
@@ -712,6 +903,85 @@
     to { opacity: 1; transform: translateY(0); }
   }
 
+  /* Timer name area (shown below state labels when multiple timers) */
+  .timer-name-area {
+    margin-top: 0.5rem;
+    animation: fade-in 0.3s ease;
+  }
+
+  .timer-name-label {
+    border: none;
+    background: none;
+    font-family: "Anybody", sans-serif;
+    font-size: 0.7rem;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--stone);
+    cursor: pointer;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    opacity: 0.7;
+  }
+
+  .timer-name-label:hover {
+    opacity: 1;
+    background: rgba(44, 44, 44, 0.04);
+  }
+
+  .timer-name-input {
+    font-family: "Anybody", sans-serif;
+    font-size: 0.7rem;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--charcoal);
+    background: white;
+    border: 1px solid var(--brass);
+    border-radius: 4px;
+    padding: 0.2rem 0.5rem;
+    outline: none;
+    text-align: center;
+    width: 120px;
+  }
+
+  /* Pagination dots */
+  .timer-dots {
+    display: flex;
+    gap: 6px;
+    margin-top: 0.4rem;
+    animation: fade-in 0.3s ease;
+  }
+
+  .timer-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    border: 1px solid var(--stone);
+    background: transparent;
+    padding: 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0.4;
+  }
+
+  .timer-dot.active {
+    background: var(--brass);
+    border-color: var(--brass);
+    opacity: 1;
+  }
+
+  .timer-dot:hover:not(.active) {
+    opacity: 0.7;
+    border-color: var(--brass);
+  }
+
+  /* Compact timer label — hidden by default, shown only at compact/tiny breakpoints */
+  .compact-timer-label {
+    display: none;
+  }
+
   /* Controls */
   .controls {
     display: flex;
@@ -848,6 +1118,29 @@
     background: rgba(44, 44, 44, 0.04);
   }
 
+  /* Remove timer button */
+  .remove-timer-btn {
+    border: none;
+    background: none;
+    color: var(--stone);
+    font-family: "Anybody", sans-serif;
+    font-size: 0.7rem;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 0.3rem 0.6rem;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    opacity: 0.5;
+  }
+
+  .remove-timer-btn:hover {
+    opacity: 1;
+    color: var(--amber-alert);
+    background: rgba(212, 118, 58, 0.06);
+  }
+
   /* Pin button */
   .pin-btn {
     position: absolute;
@@ -940,6 +1233,33 @@
     opacity: 1;
     box-shadow: var(--shadow-btn-hover);
     transform: translateX(-50%) translateY(-1px);
+  }
+
+  /* Add timer button */
+  .add-timer-btn {
+    position: absolute;
+    top: 1rem;
+    right: 3.5rem;
+    z-index: 2;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #e0dbd3;
+    border-radius: 8px;
+    background: white;
+    color: var(--stone);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-btn);
+    transition: all 0.2s ease;
+    opacity: 0.6;
+  }
+
+  .add-timer-btn:hover {
+    opacity: 1;
+    box-shadow: var(--shadow-btn-hover);
+    transform: translateY(-1px);
   }
 
   /* Settings back button */
@@ -1070,15 +1390,64 @@
     box-shadow: 0 1px 4px rgba(196, 162, 101, 0.3);
   }
 
+  /* Toast notification */
+  .toast {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--charcoal);
+    color: var(--cream);
+    font-family: "Anybody", sans-serif;
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.05em;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(44, 44, 44, 0.25);
+    z-index: 10;
+    animation: toast-in 0.3s ease;
+    white-space: nowrap;
+  }
+
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
   /* Compact tier and below: hide secondary controls and tick marks */
   @media (max-width: 349px), (max-height: 399px) {
     .progress-ring line { display: none; }
     .adjust-row .adjust-btn { display: none; }
     .adjust-row.secondary { display: none; }
     .reset-btn { display: none; }
+    .remove-timer-btn { display: none; }
     .pin-btn { display: none; }
     .mini-btn { display: none; }
     .settings-btn { display: none; }
+    .add-timer-btn { display: none; }
+    .timer-name-area { display: none; }
+    .timer-dots { display: none; }
+
+    /* Show the compact label instead */
+    .compact-timer-label {
+      display: block;
+      position: absolute;
+      top: 2px;
+      left: 4px;
+      font-family: "Anybody", sans-serif;
+      font-size: 0.5rem;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--stone);
+      opacity: 0.6;
+      z-index: 3;
+      max-width: 60px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
 
   /* Tiny tier: also hide the progress ring entirely */
