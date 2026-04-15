@@ -1,0 +1,84 @@
+import * as App from "../wailsjs/go/main/App";
+import { WindowSetAlwaysOnTop, WindowSetSize } from "../wailsjs/runtime/runtime";
+
+type Args = Record<string, unknown> | undefined;
+
+// Maps Tauri-style snake_case command names to Wails-generated PascalCase
+// methods on the Go App struct. Arg shapes mirror the original Tauri calls.
+export async function invoke<T = unknown>(cmd: string, args?: Args): Promise<T> {
+  const a = args ?? {};
+  switch (cmd) {
+    case "get_timer_status":
+      return (await App.GetTimerStatus()) as T;
+    case "get_timer_list":
+      return (await App.GetTimerList()) as T;
+    case "start_timer":
+      return (await App.StartTimer()) as T;
+    case "pause_timer":
+      return (await App.PauseTimer()) as T;
+    case "resume_timer":
+      return (await App.ResumeTimer()) as T;
+    case "reset_timer":
+      return (await App.ResetTimer()) as T;
+    case "add_time":
+      return (await App.AddTime()) as T;
+    case "remove_time":
+      return (await App.RemoveTime()) as T;
+    case "add_time_secondary":
+      return (await App.AddTimeSecondary()) as T;
+    case "remove_time_secondary":
+      return (await App.RemoveTimeSecondary()) as T;
+    case "add_time_tertiary":
+      return (await App.AddTimeTertiary()) as T;
+    case "remove_time_tertiary":
+      return (await App.RemoveTimeTertiary()) as T;
+    case "add_time_custom":
+      return (await App.AddTimeCustom((a as any).seconds)) as T;
+    case "remove_time_custom":
+      return (await App.RemoveTimeCustom((a as any).seconds)) as T;
+    case "create_timer":
+      return (await App.CreateTimer((a as any).durationSecs)) as T;
+    case "add_new_timer":
+      return (await App.AddNewTimer((a as any).name)) as T;
+    case "remove_existing_timer":
+      return (await App.RemoveExistingTimer((a as any).index)) as T;
+    case "switch_timer":
+      return (await App.SwitchTimer((a as any).index)) as T;
+    case "switch_timer_next":
+      return (await App.SwitchTimerNext()) as T;
+    case "switch_timer_prev":
+      return (await App.SwitchTimerPrev()) as T;
+    case "rename_timer":
+      return (await App.RenameTimer((a as any).index, (a as any).name)) as T;
+    case "get_settings":
+      return (await App.GetSettings()) as T;
+    case "save_settings":
+      return (await App.SaveSettings((a as any).newSettings)) as T;
+  }
+  throw new Error(`Unknown IPC command: ${cmd}`);
+}
+
+export const windowApi = {
+  setAlwaysOnTop: (on: boolean) => WindowSetAlwaysOnTop(on),
+  setSize: (w: number, h: number) => WindowSetSize(w, h),
+  requestUserAttention: (_: unknown) => {
+    /* no Wails equivalent on Linux; noop */
+  },
+};
+
+// Browser Notification API wrapper matching Tauri plugin-notification shape.
+export async function isPermissionGranted(): Promise<boolean> {
+  if (!("Notification" in window)) return false;
+  return Notification.permission === "granted";
+}
+
+export async function requestPermission(): Promise<"granted" | "denied" | "default"> {
+  if (!("Notification" in window)) return "denied";
+  return await Notification.requestPermission();
+}
+
+export function sendNotification(opts: { title: string; body?: string }): void {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted") return;
+  new Notification(opts.title, { body: opts.body });
+}
