@@ -1,10 +1,17 @@
 import * as App from "../wailsjs/go/main/App";
 import {
+  Environment,
   WindowSetAlwaysOnTop,
   WindowSetSize,
   WindowGetPosition,
   WindowSetPosition,
 } from "../wailsjs/runtime/runtime";
+
+let platformPromise: Promise<string> | null = null;
+function getPlatform(): Promise<string> {
+  if (!platformPromise) platformPromise = Environment().then((e) => e.platform);
+  return platformPromise;
+}
 
 type Args = Record<string, unknown> | undefined;
 
@@ -66,6 +73,15 @@ export async function invoke<T = unknown>(cmd: string, args?: Args): Promise<T> 
 export const windowApi = {
   setAlwaysOnTop: (on: boolean) => WindowSetAlwaysOnTop(on),
   setSize: async (w: number, h: number) => {
+    // On Windows, WindowSetSize preserves position, and GetPosition/SetPosition
+    // have a DPI-scaling mismatch on HiDPI displays that can push the window
+    // off-screen. Only save/restore on non-Windows platforms (Linux needs it
+    // because WindowSetSize snaps the window to the top of the screen).
+    const platform = await getPlatform();
+    if (platform === "windows") {
+      WindowSetSize(w, h);
+      return;
+    }
     const pos = await WindowGetPosition();
     WindowSetSize(w, h);
     WindowSetPosition(pos.x, pos.y);
