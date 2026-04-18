@@ -2,6 +2,7 @@
   "name": "timer",
   "private": true,
   "version": "0.1.0",
+  "deprecated": "Tauri stack is deprecated — use wails-app/ instead. See src-tauri/DEPRECATED.md.",
   "type": "module",
   "scripts": {
     "dev": "vite",

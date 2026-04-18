@@ -1,40 +1,31 @@
 # Timer
 
-Desktop countdown timer app built with Tauri 2 (Rust backend + Svelte 5 frontend).
+Desktop countdown timer app. **Active implementation:** Wails 2 (Go backend + Svelte 5 frontend) in `wails-app/`.
 
-## Tech Stack
+> **Deprecated:** The original Tauri 2 (Rust) implementation in `src-tauri/` and the root-level `src/` frontend are deprecated and kept only for reference. Do not add new features there. See `src-tauri/DEPRECATED.md`.
 
-- **Frontend:** Svelte 5 (runes), TypeScript, Vite 6
-- **Backend:** Rust (edition 2024), Tauri 2
-- **Persistence:** tauri-plugin-store (JSON settings), tauri-plugin-notification
+## Tech Stack (active — `wails-app/`)
+
+- **Frontend:** Svelte 5 (runes), TypeScript, Vite
+- **Backend:** Go, Wails 2
 
 ## Project Structure
 
-- `src/` — Frontend (TypeScript + Svelte). `App.svelte` is the main UI component.
-- `src-tauri/src/` — Rust backend. `lib.rs` (Tauri commands/state), `timer.rs` (core timer logic).
+- `wails-app/` — **Active app.** Go/Wails backend + Svelte frontend in `wails-app/frontend/`.
+- `src-tauri/` — *Deprecated* Rust/Tauri backend.
+- `src/` — *Deprecated* root-level Svelte frontend (Tauri-era).
 - `openspec/` — Specification documents.
 
 ## Commands
 
-```bash
-npm run dev          # Vite dev server (frontend only, http://localhost:5173)
-npm run tauri dev    # Full Tauri dev mode (frontend + Rust backend)
-npm run build        # Build frontend
-npm run tauri build  # Production build (desktop app)
-```
-
-## Rust Tests
+Run from `wails-app/`:
 
 ```bash
-cd src-tauri && cargo test
+wails dev     # Full dev mode (Go backend + Vite frontend)
+wails build   # Production build
 ```
-
-Unit tests live in `src-tauri/src/timer.rs` (inline `#[cfg(test)]` module).
 
 ## Conventions
 
-- Tauri IPC commands are in `src-tauri/src/lib.rs`, decorated with `#[tauri::command]`
-- State is managed via `Mutex<T>` passed through Tauri's state system
 - Svelte 5 runes (`$state`, `$derived`) for reactive state, not legacy `$:` syntax
-- Timer logic uses monotonic `Instant` for elapsed time (immune to clock drift)
-- 80ms polling interval for timer status updates
+- Timer logic uses monotonic time for elapsed calculation (immune to clock drift)
