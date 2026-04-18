@@ -20,8 +20,8 @@ func main() {
 		Title:     "Timer",
 		Width:     400,
 		Height:    600,
-		MinWidth:  100,
-		MinHeight: 100,
+		MinWidth:  50,
+		MinHeight: 50,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

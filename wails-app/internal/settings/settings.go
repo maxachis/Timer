@@ -24,7 +24,8 @@ type AppSettings struct {
 	DefaultIncrementSecs   uint64 `json:"default_increment_secs"`
 	SecondaryIncrementSecs uint64 `json:"secondary_increment_secs"`
 	TertiaryIncrementSecs  uint64 `json:"tertiary_increment_secs"`
-	MiniWindowSize         uint64 `json:"mini_window_size"`
+	MiniWindowWidth        uint64 `json:"mini_window_width"`
+	MiniWindowHeight       uint64 `json:"mini_window_height"`
 }
 
 func Default() AppSettings {
@@ -33,7 +34,8 @@ func Default() AppSettings {
 		DefaultIncrementSecs:   300,
 		SecondaryIncrementSecs: 60,
 		TertiaryIncrementSecs:  3600,
-		MiniWindowSize:         70,
+		MiniWindowWidth:        70,
+		MiniWindowHeight:       70,
 	}
 }
 
@@ -50,8 +52,11 @@ func Validate(s AppSettings) error {
 	if s.TertiaryIncrementSecs < IncrementMin || s.TertiaryIncrementSecs > TertiaryIncrementMax {
 		return errors.New("tertiary_increment_secs must be between 60 and 86400")
 	}
-	if s.MiniWindowSize < MiniWindowSizeMin || s.MiniWindowSize > MiniWindowSizeMax {
-		return errors.New("mini_window_size must be between 50 and 400")
+	if s.MiniWindowWidth < MiniWindowSizeMin || s.MiniWindowWidth > MiniWindowSizeMax {
+		return errors.New("mini_window_width must be between 50 and 400")
+	}
+	if s.MiniWindowHeight < MiniWindowSizeMin || s.MiniWindowHeight > MiniWindowSizeMax {
+		return errors.New("mini_window_height must be between 50 and 400")
 	}
 	return nil
 }
@@ -86,8 +91,19 @@ func ParseSettings(r raw) AppSettings {
 	if v, ok := r.u64("tertiary_increment_secs"); ok && v >= IncrementMin && v <= TertiaryIncrementMax {
 		out.TertiaryIncrementSecs = v
 	}
-	if v, ok := r.u64("mini_window_size"); ok && v >= MiniWindowSizeMin && v <= MiniWindowSizeMax {
-		out.MiniWindowSize = v
+
+	// Back-compat: older settings used a single mini_window_size. Use it as
+	// the default for both width and height when new fields are absent.
+	legacy, hasLegacy := r.u64("mini_window_size")
+	if hasLegacy && legacy >= MiniWindowSizeMin && legacy <= MiniWindowSizeMax {
+		out.MiniWindowWidth = legacy
+		out.MiniWindowHeight = legacy
+	}
+	if v, ok := r.u64("mini_window_width"); ok && v >= MiniWindowSizeMin && v <= MiniWindowSizeMax {
+		out.MiniWindowWidth = v
+	}
+	if v, ok := r.u64("mini_window_height"); ok && v >= MiniWindowSizeMin && v <= MiniWindowSizeMax {
+		out.MiniWindowHeight = v
 	}
 	return out
 }
@@ -153,7 +169,9 @@ func (s *Store) SaveSettings(a AppSettings) error {
 	s.set("default_increment_secs", a.DefaultIncrementSecs)
 	s.set("secondary_increment_secs", a.SecondaryIncrementSecs)
 	s.set("tertiary_increment_secs", a.TertiaryIncrementSecs)
-	s.set("mini_window_size", a.MiniWindowSize)
+	s.set("mini_window_width", a.MiniWindowWidth)
+	s.set("mini_window_height", a.MiniWindowHeight)
+	delete(s.data, "mini_window_size")
 	return s.flush()
 }
 

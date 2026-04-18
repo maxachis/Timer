@@ -37,11 +37,13 @@
   let settingsIncrementMin = $state(5);
   let settingsSecondaryIncrementMin = $state(1);
   let settingsTertiaryIncrementMin = $state(60);
-  let settingsMiniWindowSize = $state(70);
+  let settingsMiniWindowWidth = $state(70);
+  let settingsMiniWindowHeight = $state(70);
   let incrementSecs = $state(300);
   let secondaryIncrementSecs = $state(60);
   let tertiaryIncrementSecs = $state(3600);
-  let miniWindowSize = $state(70);
+  let miniWindowWidth = $state(70);
+  let miniWindowHeight = $state(70);
 
   // Multi-timer state
   let activeIndex = $state(0);
@@ -78,17 +80,20 @@
       default_increment_secs: number;
       secondary_increment_secs: number;
       tertiary_increment_secs: number;
-      mini_window_size: number;
+      mini_window_width: number;
+      mini_window_height: number;
     }>("get_settings");
     settingsDurationMin = Math.round(s.default_duration_secs / 60);
     settingsIncrementMin = Math.round(s.default_increment_secs / 60);
     settingsSecondaryIncrementMin = Math.round(s.secondary_increment_secs / 60);
     settingsTertiaryIncrementMin = Math.round(s.tertiary_increment_secs / 60);
-    settingsMiniWindowSize = s.mini_window_size;
+    settingsMiniWindowWidth = s.mini_window_width;
+    settingsMiniWindowHeight = s.mini_window_height;
     incrementSecs = s.default_increment_secs;
     secondaryIncrementSecs = s.secondary_increment_secs;
     tertiaryIncrementSecs = s.tertiary_increment_secs;
-    miniWindowSize = s.mini_window_size;
+    miniWindowWidth = s.mini_window_width;
+    miniWindowHeight = s.mini_window_height;
   }
 
   async function openSettings() {
@@ -105,19 +110,22 @@
     const incrementMin = Math.max(1, Math.min(60, settingsIncrementMin));
     const secondaryIncrementMin = Math.max(1, Math.min(60, settingsSecondaryIncrementMin));
     const tertiaryIncrementMin = Math.max(1, Math.min(1440, settingsTertiaryIncrementMin));
-    const miniSize = Math.max(50, Math.min(400, settingsMiniWindowSize));
+    const miniWidth = Math.max(50, Math.min(400, settingsMiniWindowWidth));
+    const miniHeight = Math.max(50, Math.min(400, settingsMiniWindowHeight));
     const newSettings = {
       default_duration_secs: durationMin * 60,
       default_increment_secs: incrementMin * 60,
       secondary_increment_secs: secondaryIncrementMin * 60,
       tertiary_increment_secs: tertiaryIncrementMin * 60,
-      mini_window_size: miniSize,
+      mini_window_width: miniWidth,
+      mini_window_height: miniHeight,
     };
     await invoke("save_settings", { newSettings });
     incrementSecs = newSettings.default_increment_secs;
     secondaryIncrementSecs = newSettings.secondary_increment_secs;
     tertiaryIncrementSecs = newSettings.tertiary_increment_secs;
-    miniWindowSize = newSettings.mini_window_size;
+    miniWindowWidth = newSettings.mini_window_width;
+    miniWindowHeight = newSettings.mini_window_height;
     showSettings = false;
     if (timerState === "idle") {
       await invoke("create_timer", { durationSecs: newSettings.default_duration_secs });
@@ -131,7 +139,7 @@
   }
 
   async function shrinkToMinimumSize() {
-    await getCurrentWindow().setSize(miniWindowSize, miniWindowSize);
+    await getCurrentWindow().setSize(miniWindowWidth, miniWindowHeight);
   }
 
   // Track total duration for the progress ring
@@ -450,7 +458,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Anybody:wght@300;400;500&display=swap" rel="stylesheet" />
 </svelte:head>
 
-<main style="--wails-draggable:drag" class:finished={isFinished} class:running={timerState === "running"} class:paused={timerState === "paused"}>
+<main style={showSettings ? "--wails-draggable:no-drag" : "--wails-draggable:drag"} class:finished={isFinished} class:running={timerState === "running"} class:paused={timerState === "paused"}>
   {#if showSettings}
     <!-- Settings view -->
     <div class="texture"></div>
@@ -525,14 +533,29 @@
       </div>
 
       <div class="settings-field">
-        <label class="settings-label" for="mini-window-size">Mini window size</label>
+        <label class="settings-label" for="mini-window-width">Mini window width</label>
         <div class="settings-input-row">
           <input
-            id="mini-window-size"
+            id="mini-window-width"
             type="number"
             min="50"
             max="400"
-            bind:value={settingsMiniWindowSize}
+            bind:value={settingsMiniWindowWidth}
+            class="settings-input"
+          />
+          <span class="settings-unit">px</span>
+        </div>
+      </div>
+
+      <div class="settings-field">
+        <label class="settings-label" for="mini-window-height">Mini window height</label>
+        <div class="settings-input-row">
+          <input
+            id="mini-window-height"
+            type="number"
+            min="50"
+            max="400"
+            bind:value={settingsMiniWindowHeight}
             class="settings-input"
           />
           <span class="settings-unit">px</span>
