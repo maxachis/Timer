@@ -40,7 +40,7 @@
   let incrementSecs = $state(300);
   let secondaryIncrementSecs = $state(60);
   let tertiaryIncrementSecs = $state(3600);
-  const MIN_WINDOW_SIZE = 100;
+  const MIN_WINDOW_SIZE = 70;
 
   // Multi-timer state
   let activeIndex = $state(0);

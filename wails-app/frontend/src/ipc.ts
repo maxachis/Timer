@@ -1,5 +1,10 @@
 import * as App from "../wailsjs/go/main/App";
-import { WindowSetAlwaysOnTop, WindowSetSize } from "../wailsjs/runtime/runtime";
+import {
+  WindowSetAlwaysOnTop,
+  WindowSetSize,
+  WindowGetPosition,
+  WindowSetPosition,
+} from "../wailsjs/runtime/runtime";
 
 type Args = Record<string, unknown> | undefined;
 
@@ -60,7 +65,11 @@ export async function invoke<T = unknown>(cmd: string, args?: Args): Promise<T> 
 
 export const windowApi = {
   setAlwaysOnTop: (on: boolean) => WindowSetAlwaysOnTop(on),
-  setSize: (w: number, h: number) => WindowSetSize(w, h),
+  setSize: async (w: number, h: number) => {
+    const pos = await WindowGetPosition();
+    WindowSetSize(w, h);
+    WindowSetPosition(pos.x, pos.y);
+  },
   requestUserAttention: (_: unknown) => {
     /* no Wails equivalent on Linux; noop */
   },
