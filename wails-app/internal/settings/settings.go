@@ -13,6 +13,8 @@ const (
 	IncrementMin         uint64 = 60
 	IncrementMax         uint64 = 3600
 	TertiaryIncrementMax uint64 = 86400
+	MiniWindowSizeMin    uint64 = 50
+	MiniWindowSizeMax    uint64 = 400
 
 	StoreFileName = "settings.json"
 )
@@ -22,6 +24,7 @@ type AppSettings struct {
 	DefaultIncrementSecs   uint64 `json:"default_increment_secs"`
 	SecondaryIncrementSecs uint64 `json:"secondary_increment_secs"`
 	TertiaryIncrementSecs  uint64 `json:"tertiary_increment_secs"`
+	MiniWindowSize         uint64 `json:"mini_window_size"`
 }
 
 func Default() AppSettings {
@@ -30,6 +33,7 @@ func Default() AppSettings {
 		DefaultIncrementSecs:   300,
 		SecondaryIncrementSecs: 60,
 		TertiaryIncrementSecs:  3600,
+		MiniWindowSize:         70,
 	}
 }
 
@@ -45,6 +49,9 @@ func Validate(s AppSettings) error {
 	}
 	if s.TertiaryIncrementSecs < IncrementMin || s.TertiaryIncrementSecs > TertiaryIncrementMax {
 		return errors.New("tertiary_increment_secs must be between 60 and 86400")
+	}
+	if s.MiniWindowSize < MiniWindowSizeMin || s.MiniWindowSize > MiniWindowSizeMax {
+		return errors.New("mini_window_size must be between 50 and 400")
 	}
 	return nil
 }
@@ -78,6 +85,9 @@ func ParseSettings(r raw) AppSettings {
 	}
 	if v, ok := r.u64("tertiary_increment_secs"); ok && v >= IncrementMin && v <= TertiaryIncrementMax {
 		out.TertiaryIncrementSecs = v
+	}
+	if v, ok := r.u64("mini_window_size"); ok && v >= MiniWindowSizeMin && v <= MiniWindowSizeMax {
+		out.MiniWindowSize = v
 	}
 	return out
 }
@@ -143,6 +153,7 @@ func (s *Store) SaveSettings(a AppSettings) error {
 	s.set("default_increment_secs", a.DefaultIncrementSecs)
 	s.set("secondary_increment_secs", a.SecondaryIncrementSecs)
 	s.set("tertiary_increment_secs", a.TertiaryIncrementSecs)
+	s.set("mini_window_size", a.MiniWindowSize)
 	return s.flush()
 }
 

@@ -37,10 +37,11 @@
   let settingsIncrementMin = $state(5);
   let settingsSecondaryIncrementMin = $state(1);
   let settingsTertiaryIncrementMin = $state(60);
+  let settingsMiniWindowSize = $state(70);
   let incrementSecs = $state(300);
   let secondaryIncrementSecs = $state(60);
   let tertiaryIncrementSecs = $state(3600);
-  const MIN_WINDOW_SIZE = 70;
+  let miniWindowSize = $state(70);
 
   // Multi-timer state
   let activeIndex = $state(0);
@@ -77,14 +78,17 @@
       default_increment_secs: number;
       secondary_increment_secs: number;
       tertiary_increment_secs: number;
+      mini_window_size: number;
     }>("get_settings");
     settingsDurationMin = Math.round(s.default_duration_secs / 60);
     settingsIncrementMin = Math.round(s.default_increment_secs / 60);
     settingsSecondaryIncrementMin = Math.round(s.secondary_increment_secs / 60);
     settingsTertiaryIncrementMin = Math.round(s.tertiary_increment_secs / 60);
+    settingsMiniWindowSize = s.mini_window_size;
     incrementSecs = s.default_increment_secs;
     secondaryIncrementSecs = s.secondary_increment_secs;
     tertiaryIncrementSecs = s.tertiary_increment_secs;
+    miniWindowSize = s.mini_window_size;
   }
 
   async function openSettings() {
@@ -101,16 +105,19 @@
     const incrementMin = Math.max(1, Math.min(60, settingsIncrementMin));
     const secondaryIncrementMin = Math.max(1, Math.min(60, settingsSecondaryIncrementMin));
     const tertiaryIncrementMin = Math.max(1, Math.min(1440, settingsTertiaryIncrementMin));
+    const miniSize = Math.max(50, Math.min(400, settingsMiniWindowSize));
     const newSettings = {
       default_duration_secs: durationMin * 60,
       default_increment_secs: incrementMin * 60,
       secondary_increment_secs: secondaryIncrementMin * 60,
       tertiary_increment_secs: tertiaryIncrementMin * 60,
+      mini_window_size: miniSize,
     };
     await invoke("save_settings", { newSettings });
     incrementSecs = newSettings.default_increment_secs;
     secondaryIncrementSecs = newSettings.secondary_increment_secs;
     tertiaryIncrementSecs = newSettings.tertiary_increment_secs;
+    miniWindowSize = newSettings.mini_window_size;
     showSettings = false;
     if (timerState === "idle") {
       await invoke("create_timer", { durationSecs: newSettings.default_duration_secs });
@@ -124,7 +131,7 @@
   }
 
   async function shrinkToMinimumSize() {
-    await getCurrentWindow().setSize(MIN_WINDOW_SIZE, MIN_WINDOW_SIZE);
+    await getCurrentWindow().setSize(miniWindowSize, miniWindowSize);
   }
 
   // Track total duration for the progress ring
@@ -514,6 +521,21 @@
             class="settings-input"
           />
           <span class="settings-unit">min</span>
+        </div>
+      </div>
+
+      <div class="settings-field">
+        <label class="settings-label" for="mini-window-size">Mini window size</label>
+        <div class="settings-input-row">
+          <input
+            id="mini-window-size"
+            type="number"
+            min="50"
+            max="400"
+            bind:value={settingsMiniWindowSize}
+            class="settings-input"
+          />
+          <span class="settings-unit">px</span>
         </div>
       </div>
 

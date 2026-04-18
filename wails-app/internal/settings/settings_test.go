@@ -22,44 +22,69 @@ func mkraw(t *testing.T, kv map[string]any) raw {
 
 func TestDefaultSettingsValues(t *testing.T) {
 	d := Default()
-	if d.DefaultDurationSecs != 300 || d.DefaultIncrementSecs != 300 || d.SecondaryIncrementSecs != 60 || d.TertiaryIncrementSecs != 3600 {
+	if d.DefaultDurationSecs != 300 || d.DefaultIncrementSecs != 300 || d.SecondaryIncrementSecs != 60 || d.TertiaryIncrementSecs != 3600 || d.MiniWindowSize != 70 {
 		t.Fatalf("unexpected defaults: %+v", d)
 	}
 }
 
 func TestValidateAcceptsBoundaries(t *testing.T) {
-	if err := Validate(AppSettings{60, 60, 60, 60}); err != nil {
+	if err := Validate(AppSettings{60, 60, 60, 60, 50}); err != nil {
 		t.Fatal(err)
 	}
-	if err := Validate(AppSettings{10800, 3600, 3600, 86400}); err != nil {
+	if err := Validate(AppSettings{10800, 3600, 3600, 86400, 400}); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestValidateRejectsDurationBelowMin(t *testing.T) {
-	err := Validate(AppSettings{59, 300, 60, 3600})
+	err := Validate(AppSettings{59, 300, 60, 3600, 70})
 	if err == nil || !strings.Contains(err.Error(), "default_duration_secs") {
 		t.Fatalf("bad err: %v", err)
 	}
 }
 
 func TestValidateRejectsDurationAboveMax(t *testing.T) {
-	if err := Validate(AppSettings{10801, 300, 60, 3600}); err == nil {
+	if err := Validate(AppSettings{10801, 300, 60, 3600, 70}); err == nil {
 		t.Fatal("expected err")
 	}
 }
 
 func TestValidateRejectsIncrementOutOfRange(t *testing.T) {
-	err := Validate(AppSettings{300, 3601, 60, 3600})
+	err := Validate(AppSettings{300, 3601, 60, 3600, 70})
 	if err == nil || !strings.Contains(err.Error(), "default_increment_secs") {
 		t.Fatalf("bad err: %v", err)
 	}
 }
 
 func TestValidateRejectsSecondaryIncrementOutOfRange(t *testing.T) {
-	err := Validate(AppSettings{300, 300, 59, 3600})
+	err := Validate(AppSettings{300, 300, 59, 3600, 70})
 	if err == nil || !strings.Contains(err.Error(), "secondary_increment_secs") {
 		t.Fatalf("bad err: %v", err)
+	}
+}
+
+func TestValidateRejectsMiniWindowSizeOutOfRange(t *testing.T) {
+	err := Validate(AppSettings{300, 300, 60, 3600, 49})
+	if err == nil || !strings.Contains(err.Error(), "mini_window_size") {
+		t.Fatalf("bad err: %v", err)
+	}
+	err = Validate(AppSettings{300, 300, 60, 3600, 401})
+	if err == nil || !strings.Contains(err.Error(), "mini_window_size") {
+		t.Fatalf("bad err: %v", err)
+	}
+}
+
+func TestParseSettingsReadsMiniWindowSize(t *testing.T) {
+	r := mkraw(t, map[string]any{"mini_window_size": 120})
+	if s := ParseSettings(r); s.MiniWindowSize != 120 {
+		t.Fatalf("got %d", s.MiniWindowSize)
+	}
+}
+
+func TestParseSettingsFallsBackOnMiniWindowSizeOutOfRange(t *testing.T) {
+	r := mkraw(t, map[string]any{"mini_window_size": 10})
+	if s := ParseSettings(r); s.MiniWindowSize != Default().MiniWindowSize {
+		t.Fatalf("expected default fallback, got %d", s.MiniWindowSize)
 	}
 }
 
@@ -135,7 +160,7 @@ func TestAppSettingsSerializesWithExpectedFieldNames(t *testing.T) {
 }
 
 func TestAppSettingsRoundtrip(t *testing.T) {
-	in := AppSettings{600, 120, 90, 3600}
+	in := AppSettings{600, 120, 90, 3600, 120}
 	b, _ := json.Marshal(in)
 	var out AppSettings
 	json.Unmarshal(b, &out)
@@ -157,7 +182,7 @@ func TestStoreRoundtripOnDisk(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SaveSettings(AppSettings{600, 120, 90, 3600}); err != nil {
+	if err := s.SaveSettings(AppSettings{600, 120, 90, 3600, 120}); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.SaveTimerNames([]string{"X", "Y"}); err != nil {
@@ -165,7 +190,7 @@ func TestStoreRoundtripOnDisk(t *testing.T) {
 	}
 	s2, _ := OpenStoreAt(path)
 	got := s2.LoadSettings()
-	if got != (AppSettings{600, 120, 90, 3600}) {
+	if got != (AppSettings{600, 120, 90, 3600, 120}) {
 		t.Fatalf("%+v", got)
 	}
 	names := s2.LoadTimerNames()
