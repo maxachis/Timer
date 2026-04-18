@@ -3,6 +3,7 @@ import {
   Environment,
   WindowSetAlwaysOnTop,
   WindowSetSize,
+  WindowSetMinSize,
   WindowGetPosition,
   WindowSetPosition,
 } from "../wailsjs/runtime/runtime";
@@ -73,6 +74,11 @@ export async function invoke<T = unknown>(cmd: string, args?: Args): Promise<T> 
 export const windowApi = {
   setAlwaysOnTop: (on: boolean) => WindowSetAlwaysOnTop(on),
   setSize: async (w: number, h: number) => {
+    // Update the min track size so Windows' WM_GETMINMAXINFO returns the new
+    // floor; otherwise starting a drag snaps the window back to the startup
+    // minimums. Also lets widths/heights below the OS default titled-window
+    // minimum (~132px) take effect.
+    WindowSetMinSize(w, h);
     // On Windows, WindowSetSize preserves position, and GetPosition/SetPosition
     // have a DPI-scaling mismatch on HiDPI displays that can push the window
     // off-screen. Only save/restore on non-Windows platforms (Linux needs it
