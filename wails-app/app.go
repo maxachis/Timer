@@ -45,6 +45,10 @@ func NewApp() *App {
 
 func (a *App) startup(ctx context.Context) { a.ctx = ctx }
 
+func (a *App) domReady(ctx context.Context) {
+	installMinSizeOverride(ctx, "Timer", 50, 50)
+}
+
 func (a *App) GetTimerStatus() TimerStatus {
 	a.mu.Lock()
 	defer a.mu.Unlock()
