@@ -1,6 +1,9 @@
 import * as App from "../wailsjs/go/main/App";
 import {
   Environment,
+  Quit,
+  WindowGetSize,
+  WindowMinimise,
   WindowSetAlwaysOnTop,
   WindowSetSize,
   WindowSetMinSize,
@@ -95,6 +98,9 @@ export const windowApi = {
   requestUserAttention: (_: unknown) => {
     /* no Wails equivalent on Linux; noop */
   },
+  getSize: () => WindowGetSize(),
+  minimize: () => WindowMinimise(),
+  close: () => Quit(),
 };
 
 // Browser Notification API wrapper matching Tauri plugin-notification shape.

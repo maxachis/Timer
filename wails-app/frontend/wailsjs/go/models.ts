@@ -32,6 +32,8 @@ export namespace settings {
 	    default_increment_secs: number;
 	    secondary_increment_secs: number;
 	    tertiary_increment_secs: number;
+	    mini_window_width: number;
+	    mini_window_height: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -43,6 +45,8 @@ export namespace settings {
 	        this.default_increment_secs = source["default_increment_secs"];
 	        this.secondary_increment_secs = source["secondary_increment_secs"];
 	        this.tertiary_increment_secs = source["tertiary_increment_secs"];
+	        this.mini_window_width = source["mini_window_width"];
+	        this.mini_window_height = source["mini_window_height"];
 	    }
 	}
 

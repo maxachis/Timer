@@ -138,7 +138,17 @@
     await getCurrentWindow().setAlwaysOnTop(alwaysOnTop);
   }
 
-  async function shrinkToMinimumSize() {
+  let preMiniSize: { w: number; h: number } | null = $state(null);
+
+  async function toggleMiniMode() {
+    if (preMiniSize) {
+      const { w, h } = preMiniSize;
+      preMiniSize = null;
+      await getCurrentWindow().setSize(w, h);
+      return;
+    }
+    const current = await getCurrentWindow().getSize();
+    preMiniSize = { w: current.w, h: current.h };
     await getCurrentWindow().setSize(miniWindowWidth, miniWindowHeight);
   }
 
@@ -442,7 +452,20 @@
           handleSwitchPrev();
         }
         break;
+      case "m":
+      case "M":
+        event.preventDefault();
+        toggleMiniMode();
+        break;
     }
+  }
+
+  function handleMinimize() {
+    getCurrentWindow().minimize();
+  }
+
+  function handleClose() {
+    getCurrentWindow().close();
   }
 
   fetchStatus();
@@ -466,6 +489,19 @@
     <button class="settings-back-btn" onclick={closeSettings} aria-label="Back to timer">
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
         <path d="M10 2L4 8L10 14" />
+      </svg>
+    </button>
+
+    <button class="window-btn minimize-btn" onclick={handleMinimize} aria-label="Minimize">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <line x1="2" y1="6" x2="10" y2="6" />
+      </svg>
+    </button>
+
+    <button class="window-btn close-btn" onclick={handleClose} aria-label="Close">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <line x1="2" y1="2" x2="10" y2="10" />
+        <line x1="10" y1="2" x2="2" y2="10" />
       </svg>
     </button>
 
@@ -592,7 +628,7 @@
     </button>
 
     <!-- Mini mode button -->
-    <button class="mini-btn" onclick={shrinkToMinimumSize} aria-label="Shrink to minimum size">
+    <button class="mini-btn" onclick={toggleMiniMode} aria-label="Toggle mini mode">
       Mini
     </button>
 
@@ -601,6 +637,21 @@
       <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
         <line x1="6" y1="1" x2="6" y2="11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         <line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </button>
+
+    <!-- Minimize button -->
+    <button class="window-btn minimize-btn" onclick={handleMinimize} aria-label="Minimize">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <line x1="2" y1="6" x2="10" y2="6" />
+      </svg>
+    </button>
+
+    <!-- Close button -->
+    <button class="window-btn close-btn" onclick={handleClose} aria-label="Close">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <line x1="2" y1="2" x2="10" y2="10" />
+        <line x1="10" y1="2" x2="2" y2="10" />
       </svg>
     </button>
 
@@ -1250,7 +1301,7 @@
   .pin-btn {
     position: absolute;
     top: 1rem;
-    right: 1rem;
+    right: 6rem;
     z-index: 2;
     width: 32px;
     height: 32px;
@@ -1344,7 +1395,7 @@
   .add-timer-btn {
     position: absolute;
     top: 1rem;
-    right: 3.5rem;
+    right: 8.5rem;
     z-index: 2;
     width: 32px;
     height: 32px;
@@ -1365,6 +1416,46 @@
     opacity: 1;
     box-shadow: var(--shadow-btn-hover);
     transform: translateY(-1px);
+  }
+
+  /* Window controls (minimize / close) */
+  .window-btn {
+    position: absolute;
+    top: 1rem;
+    z-index: 2;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #e0dbd3;
+    border-radius: 8px;
+    background: white;
+    color: var(--stone);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-btn);
+    transition: all 0.2s ease;
+    opacity: 0.6;
+  }
+
+  .window-btn:hover {
+    opacity: 1;
+    box-shadow: var(--shadow-btn-hover);
+    transform: translateY(-1px);
+  }
+
+  .minimize-btn {
+    right: 3.5rem;
+  }
+
+  .close-btn {
+    right: 1rem;
+  }
+
+  .close-btn:hover {
+    color: var(--amber-alert);
+    border-color: var(--amber-alert);
+    background: rgba(212, 118, 58, 0.06);
   }
 
   /* Settings back button */
@@ -1532,6 +1623,7 @@
     .mini-btn { display: none; }
     .settings-btn { display: none; }
     .add-timer-btn { display: none; }
+    .window-btn { display: none; }
     .timer-name-area { display: none; }
     .timer-dots { display: none; }
 
@@ -1556,9 +1648,10 @@
     }
   }
 
-  /* Tiny tier: also hide the progress ring entirely */
+  /* Tiny tier: also hide the progress ring and compact timer label */
   @media (max-width: 179px), (max-height: 179px) {
     .progress-ring { display: none; }
+    .compact-timer-label { display: none; }
   }
 
 </style>
