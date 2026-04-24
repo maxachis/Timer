@@ -170,8 +170,13 @@
     return String(Math.floor(secs % 60)).padStart(2, "0");
   }
 
+  let audioCtx: AudioContext | null = null;
+  function getAudioCtx(): AudioContext {
+    return (audioCtx ||= new AudioContext());
+  }
+
   function playAlertSound() {
-    const ctx = new AudioContext();
+    const ctx = getAudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
@@ -185,6 +190,24 @@
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.5);
   }
+
+  function playBlip(freq: number) {
+    const ctx = getAudioCtx();
+    const t0 = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    osc.connect(gain).connect(ctx.destination);
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(0.2, t0 + 0.005);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.13);
+    osc.start(t0);
+    osc.stop(t0 + 0.15);
+  }
+
+  const playStartBlip = () => playBlip(880);
+  const playStopBlip = () => playBlip(440);
 
   async function sendCompletionNotification() {
     let permitted = await isPermissionGranted();
@@ -239,23 +262,27 @@
   }
 
   async function handleStart() {
+    playStartBlip();
     await invoke("start_timer");
     await fetchStatus();
     startPolling();
   }
 
   async function handlePause() {
+    playStopBlip();
     await invoke("pause_timer");
     await fetchStatus();
   }
 
   async function handleResume() {
+    playStartBlip();
     await invoke("resume_timer");
     await fetchStatus();
     startPolling();
   }
 
   async function handleReset() {
+    playStopBlip();
     await invoke("reset_timer");
     getCurrentWindow().requestUserAttention(null);
     await fetchStatus();
@@ -913,6 +940,15 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+  }
+
+  :global(button),
+  :global(input),
+  :global(select),
+  :global(textarea),
+  :global(a),
+  :global(label) {
+    --wails-draggable: no-drag;
   }
 
   :global(body) {
