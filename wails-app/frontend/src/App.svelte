@@ -462,6 +462,8 @@
         break;
       case "t":
       case "T":
+      case "p":
+      case "P":
         event.preventDefault();
         toggleAlwaysOnTop();
         break;
