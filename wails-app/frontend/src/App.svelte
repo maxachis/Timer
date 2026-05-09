@@ -1663,33 +1663,64 @@
     .add-timer-btn { display: none; }
     .window-btn { display: none; }
     .timer-name-area { display: none; }
-    .timer-dots { display: none; }
 
-    /* Show the compact label instead */
+    /* Reposition pagination dots above the digits in compact/mini view */
+    .timer-dots {
+      position: absolute;
+      top: 4px;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-top: 0;
+      gap: 4px;
+      z-index: 3;
+    }
+
+    .timer-dot {
+      width: 5px;
+      height: 5px;
+    }
+
+    /* Active timer name, centered just below the dots */
     .compact-timer-label {
       display: block;
       position: absolute;
-      top: 2px;
-      left: 4px;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
       font-family: "Anybody", sans-serif;
-      font-size: 0.5rem;
+      font-size: 0.55rem;
       font-weight: 500;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--stone);
-      opacity: 0.6;
+      opacity: 0.7;
       z-index: 3;
-      max-width: 60px;
+      max-width: 90%;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+      text-align: center;
     }
   }
 
-  /* Tiny tier: also hide the progress ring and compact timer label */
+  /* Tiny tier: also hide the progress ring */
   @media (max-width: 179px), (max-height: 179px) {
     .progress-ring { display: none; }
-    .compact-timer-label { display: none; }
+
+    .timer-dots {
+      top: 2px;
+      gap: 3px;
+    }
+
+    .timer-dot {
+      width: 4px;
+      height: 4px;
+    }
+
+    .compact-timer-label {
+      top: 10px;
+      font-size: 0.5rem;
+    }
   }
 
 </style>
