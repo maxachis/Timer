@@ -688,7 +688,7 @@
     <div class="texture"></div>
 
     <!-- Timer face -->
-    <div class="timer-face" style="--wails-draggable:drag">
+    <div class="timer-face" class:has-mini-label={hasMultipleTimers} style="--wails-draggable:drag">
       <svg class="progress-ring" viewBox="0 0 300 300" style="--wails-draggable:drag">
         <!-- Track -->
         <circle
@@ -1680,6 +1680,12 @@
       height: 5px;
     }
 
+    /* Push digits down so they sit equidistant from the label above
+       and the play/pause button below. */
+    .timer-face.has-mini-label {
+      padding-top: 32px;
+    }
+
     /* Active timer name, centered just below the dots */
     .compact-timer-label {
       display: block;
@@ -1720,6 +1726,10 @@
     .compact-timer-label {
       top: 10px;
       font-size: 0.5rem;
+    }
+
+    .timer-face.has-mini-label {
+      padding-top: 20px;
     }
   }
 
