@@ -344,6 +344,7 @@
   }
 
   async function handleSwitchTimer(index: number) {
+    if (timerState === "running") playStopBlip();
     if (pollInterval) {
       clearInterval(pollInterval);
       pollInterval = null;
@@ -355,6 +356,7 @@
 
   async function handleSwitchNext() {
     if (timerCount <= 1) return;
+    if (timerState === "running") playStopBlip();
     if (pollInterval) {
       clearInterval(pollInterval);
       pollInterval = null;
@@ -366,6 +368,7 @@
 
   async function handleSwitchPrev() {
     if (timerCount <= 1) return;
+    if (timerState === "running") playStopBlip();
     if (pollInterval) {
       clearInterval(pollInterval);
       pollInterval = null;
