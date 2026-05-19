@@ -1101,6 +1101,7 @@
   .timer-name-area {
     margin-top: 0.5rem;
     animation: fade-in 0.3s ease;
+    --wails-draggable: no-drag;
   }
 
   .timer-name-label {
@@ -1113,9 +1114,9 @@
     text-transform: uppercase;
     color: var(--stone);
     cursor: pointer;
-    padding: 0.2rem 0.5rem;
+    padding: 0.35rem 0.7rem;
     border-radius: 4px;
-    transition: all 0.2s ease;
+    transition: opacity 0.2s ease, background 0.2s ease;
     opacity: 0.7;
   }
 
