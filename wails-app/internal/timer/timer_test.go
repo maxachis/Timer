@@ -303,3 +303,144 @@ func TestTimerNames(t *testing.T) {
 		t.Fatalf("bad names: %v", names)
 	}
 }
+
+func TestSnapshotIdleTimer(t *testing.T) {
+	c := NewCollection(300)
+	c.RenameTimer(0, "Work")
+	snap := c.Snapshot()
+	if len(snap.Timers) != 1 || snap.ActiveIndex != 0 {
+		t.Fatalf("bad snapshot: %+v", snap)
+	}
+	ts := snap.Timers[0]
+	if ts.Name != "Work" || ts.State != "idle" || ts.ElapsedMs != 0 {
+		t.Fatalf("bad timer snapshot: %+v", ts)
+	}
+	if ts.OriginalDurationMs != 300_000 || ts.DurationMs != 300_000 {
+		t.Fatalf("bad durations: %+v", ts)
+	}
+}
+
+func TestSnapshotRunningCollapsesToPaused(t *testing.T) {
+	c := NewCollection(300)
+	c.Active().Start()
+	time.Sleep(50 * time.Millisecond)
+	snap := c.Snapshot()
+	ts := snap.Timers[0]
+	if ts.State != "paused" {
+		t.Fatalf("running should snapshot as paused, got %q", ts.State)
+	}
+	if ts.ElapsedMs == 0 {
+		t.Fatal("elapsed should be > 0 for a timer that has run")
+	}
+}
+
+func TestSnapshotPreservesAddTimeAdjustments(t *testing.T) {
+	c := NewCollection(120)
+	c.Active().Start()
+	c.Active().AddTime(60 * time.Second)
+	c.Active().Pause()
+	snap := c.Snapshot()
+	ts := snap.Timers[0]
+	if ts.OriginalDurationMs != 120_000 {
+		t.Fatalf("original drifted: %d", ts.OriginalDurationMs)
+	}
+	if ts.DurationMs != 180_000 {
+		t.Fatalf("duration after +60s should be 180000ms, got %d", ts.DurationMs)
+	}
+}
+
+func TestSnapshotFinishedTimer(t *testing.T) {
+	c := NewCollection(60)
+	c.Active().Start()
+	c.Active().RemoveTime(120 * time.Second)
+	snap := c.Snapshot()
+	if snap.Timers[0].State != "finished" {
+		t.Fatalf("expected finished, got %q", snap.Timers[0].State)
+	}
+}
+
+func TestRestoreRoundtripIdle(t *testing.T) {
+	c := NewCollection(300)
+	c.RenameTimer(0, "Work")
+	c.AddTimer("Break", 600)
+	snap := c.Snapshot()
+
+	r := RestoreCollection(snap, 300)
+	if r.Count() != 2 || r.ActiveIndex() != 0 {
+		t.Fatalf("bad restored shape")
+	}
+	if r.TimerAt(0).Remaining() != 300*time.Second || r.TimerAt(1).Remaining() != 600*time.Second {
+		t.Fatal("bad restored remaining")
+	}
+	if r.TimerAt(0).StateName() != "idle" || r.TimerAt(1).StateName() != "idle" {
+		t.Fatal("idle timers should restore as idle")
+	}
+}
+
+func TestRestoreFreezesRunningAsPaused(t *testing.T) {
+	c := NewCollection(300)
+	c.Active().Start()
+	time.Sleep(50 * time.Millisecond)
+	expected := c.Active().Remaining()
+
+	snap := c.Snapshot()
+	r := RestoreCollection(snap, 300)
+
+	if r.Active().StateName() != "paused" {
+		t.Fatalf("expected paused, got %q", r.Active().StateName())
+	}
+	got := r.Active().Remaining()
+	// Tolerate small drift from snapshot timing.
+	if diff := expected - got; diff > 5*time.Millisecond || diff < -5*time.Millisecond {
+		t.Fatalf("remaining drifted: expected %v, got %v", expected, got)
+	}
+	// Confirm resume picks up from frozen elapsed.
+	r.Active().Resume()
+	time.Sleep(20 * time.Millisecond)
+	if r.Active().Remaining() >= got {
+		t.Fatal("resume should tick down from frozen elapsed")
+	}
+}
+
+func TestRestoreActiveIndexPreserved(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("B", 300)
+	c.AddTimer("C", 300)
+	c.SwitchTo(2)
+	snap := c.Snapshot()
+	r := RestoreCollection(snap, 300)
+	if r.ActiveIndex() != 2 {
+		t.Fatalf("active index lost: %d", r.ActiveIndex())
+	}
+}
+
+func TestRestoreEmptySnapshotFallsBackToDefault(t *testing.T) {
+	r := RestoreCollection(CollectionSnapshot{}, 300)
+	if r.Count() != 1 || r.Active().Remaining() != 300*time.Second {
+		t.Fatal("empty snapshot should fall back to default single timer")
+	}
+}
+
+func TestRestoreClampsActiveIndex(t *testing.T) {
+	snap := CollectionSnapshot{
+		Timers: []TimerSnapshot{
+			{Name: "A", OriginalDurationMs: 300_000, DurationMs: 300_000, State: "idle"},
+		},
+		ActiveIndex: 5,
+	}
+	r := RestoreCollection(snap, 300)
+	if r.ActiveIndex() != 0 {
+		t.Fatalf("out-of-range active index should clamp to 0, got %d", r.ActiveIndex())
+	}
+}
+
+func TestRestoreCapsToMaxTimers(t *testing.T) {
+	timers := make([]TimerSnapshot, MaxTimers+2)
+	for i := range timers {
+		timers[i] = TimerSnapshot{OriginalDurationMs: 300_000, DurationMs: 300_000, State: "idle"}
+	}
+	r := RestoreCollection(CollectionSnapshot{Timers: timers}, 300)
+	if r.Count() != MaxTimers {
+		t.Fatalf("expected count capped at %d, got %d", MaxTimers, r.Count())
+	}
+}

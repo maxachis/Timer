@@ -180,6 +180,33 @@ func (s *Store) SaveTimerNames(names []string) error {
 	return s.flush()
 }
 
+// SaveTimerStates persists an arbitrary JSON-serialisable snapshot of all
+// timers (typically a timer.CollectionSnapshot) so that the app can rehydrate
+// timer state across restarts. The settings package stays unaware of the
+// timer package by accepting an opaque value here.
+func (s *Store) SaveTimerStates(v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	s.data["timer_states"] = b
+	return s.flush()
+}
+
+// LoadTimerStates unmarshals the stored snapshot into out. Returns ok=false
+// when no snapshot is stored (no error). A malformed snapshot returns an
+// error so callers can decide to fall back to defaults.
+func (s *Store) LoadTimerStates(out any) (bool, error) {
+	v, ok := s.data["timer_states"]
+	if !ok {
+		return false, nil
+	}
+	if err := json.Unmarshal(v, out); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (s *Store) set(key string, v any) {
 	b, _ := json.Marshal(v)
 	s.data[key] = b

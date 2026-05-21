@@ -260,3 +260,103 @@ func (c *TimerCollection) TimerAt(i int) *CountdownTimer { return c.timers[i].Ti
 func (c *TimerCollection) ReplaceActive(durationSecs uint64) {
 	c.timers[c.activeIndex].Timer = NewCountdownTimer(durationSecs)
 }
+
+// TimerSnapshot is a serialisable, point-in-time view of a single timer.
+// A running timer is captured as paused so reopening the app never lets a
+// timer expire while it was closed. Durations are stored in milliseconds
+// to preserve sub-second precision across save/restore.
+type TimerSnapshot struct {
+	Name               string `json:"name"`
+	OriginalDurationMs uint64 `json:"original_duration_ms"`
+	DurationMs         uint64 `json:"duration_ms"`
+	ElapsedMs          uint64 `json:"elapsed_ms"`
+	State              string `json:"state"` // "idle" | "paused" | "finished"
+}
+
+// CollectionSnapshot is the serialisable view of a TimerCollection.
+type CollectionSnapshot struct {
+	Timers      []TimerSnapshot `json:"timers"`
+	ActiveIndex int             `json:"active_index"`
+}
+
+func msOf(d time.Duration) uint64 { return uint64(d / time.Millisecond) }
+
+func (t *CountdownTimer) snapshot() (durationMs, elapsedMs uint64, state string) {
+	dur := msOf(t.duration)
+	switch {
+	case t.IsFinished():
+		return dur, dur, "finished"
+	case t.kind == stateIdle:
+		return dur, 0, "idle"
+	case t.kind == stateRunning:
+		return dur, msOf(t.previouslyElapsed + time.Since(t.startedAt)), "paused"
+	case t.kind == statePaused:
+		return dur, msOf(t.pausedElapsed), "paused"
+	}
+	return dur, 0, "idle"
+}
+
+func (c *TimerCollection) Snapshot() CollectionSnapshot {
+	out := CollectionSnapshot{Timers: make([]TimerSnapshot, len(c.timers)), ActiveIndex: c.activeIndex}
+	for i, nt := range c.timers {
+		dur, elapsed, state := nt.Timer.snapshot()
+		out.Timers[i] = TimerSnapshot{
+			Name:               nt.Name,
+			OriginalDurationMs: msOf(nt.Timer.originalDuration),
+			DurationMs:         dur,
+			ElapsedMs:          elapsed,
+			State:              state,
+		}
+	}
+	return out
+}
+
+func restoreTimer(s TimerSnapshot, defaultDurationSecs uint64) *CountdownTimer {
+	original := time.Duration(s.OriginalDurationMs) * time.Millisecond
+	if original == 0 {
+		original = time.Duration(defaultDurationSecs) * time.Second
+	}
+	duration := time.Duration(s.DurationMs) * time.Millisecond
+	if duration == 0 {
+		duration = original
+	}
+	t := &CountdownTimer{originalDuration: original, duration: duration}
+	switch s.State {
+	case "paused":
+		t.kind = statePaused
+		t.pausedElapsed = time.Duration(s.ElapsedMs) * time.Millisecond
+		if t.pausedElapsed >= t.duration {
+			t.kind = stateFinished
+		}
+	case "finished":
+		t.kind = stateFinished
+	default:
+		t.kind = stateIdle
+	}
+	return t
+}
+
+// RestoreCollection rebuilds a TimerCollection from a snapshot. An empty or
+// invalid snapshot falls back to a fresh single-timer collection. Running
+// timers in the snapshot are revived as paused.
+func RestoreCollection(snap CollectionSnapshot, defaultDurationSecs uint64) *TimerCollection {
+	if len(snap.Timers) == 0 {
+		return NewCollection(defaultDurationSecs)
+	}
+	n := len(snap.Timers)
+	if n > MaxTimers {
+		n = MaxTimers
+	}
+	ts := make([]*NamedTimer, 0, n)
+	for i := 0; i < n; i++ {
+		ts = append(ts, &NamedTimer{
+			Name:  snap.Timers[i].Name,
+			Timer: restoreTimer(snap.Timers[i], defaultDurationSecs),
+		})
+	}
+	active := snap.ActiveIndex
+	if active < 0 || active >= len(ts) {
+		active = 0
+	}
+	return &TimerCollection{timers: ts, activeIndex: active}
+}

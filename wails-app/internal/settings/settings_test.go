@@ -232,6 +232,46 @@ func TestStoreRoundtripOnDisk(t *testing.T) {
 	}
 }
 
+type tsPayload struct {
+	Hello string `json:"hello"`
+	N     int    `json:"n"`
+}
+
+func TestLoadTimerStatesEmpty(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := OpenStoreAt(filepath.Join(dir, "settings.json"))
+	var out tsPayload
+	ok, err := s.LoadTimerStates(&out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("expected ok=false on missing key")
+	}
+}
+
+func TestStoreTimerStatesRoundtrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	s, err := OpenStoreAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := tsPayload{Hello: "world", N: 42}
+	if err := s.SaveTimerStates(in); err != nil {
+		t.Fatal(err)
+	}
+	s2, _ := OpenStoreAt(path)
+	var got tsPayload
+	ok, err := s2.LoadTimerStates(&got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || got != in {
+		t.Fatalf("roundtrip mismatch: ok=%v got=%+v", ok, got)
+	}
+}
+
 func TestSaveSettingsStripsLegacyMiniWindowSize(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "settings.json")

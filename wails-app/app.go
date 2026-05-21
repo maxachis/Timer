@@ -31,13 +31,20 @@ type App struct {
 func NewApp() *App {
 	store, err := settings.OpenStore()
 	s := settings.Default()
-	var names []string
+	var collection *timer.TimerCollection
 	if err == nil {
 		s = store.LoadSettings()
-		names = store.LoadTimerNames()
+		var snap timer.CollectionSnapshot
+		if ok, err := store.LoadTimerStates(&snap); err == nil && ok {
+			collection = timer.RestoreCollection(snap, s.DefaultDurationSecs)
+		} else {
+			collection = timer.FromNames(store.LoadTimerNames(), s.DefaultDurationSecs)
+		}
+	} else {
+		collection = timer.FromNames(nil, s.DefaultDurationSecs)
 	}
 	return &App{
-		timers:   timer.FromNames(names, s.DefaultDurationSecs),
+		timers:   collection,
 		settings: s,
 		store:    store,
 	}
@@ -47,6 +54,18 @@ func (a *App) startup(ctx context.Context) { a.ctx = ctx }
 
 func (a *App) domReady(ctx context.Context) {
 	installMinSizeOverride(ctx, "Timer", 50, 50)
+}
+
+// PersistTimerStates writes the current timer collection snapshot to disk.
+// Called from the Wails OnShutdown hook so that elapsed time and per-timer
+// state survive app restarts.
+func (a *App) PersistTimerStates() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.store == nil {
+		return
+	}
+	_ = a.store.SaveTimerStates(a.timers.Snapshot())
 }
 
 func (a *App) GetTimerStatus() TimerStatus {
