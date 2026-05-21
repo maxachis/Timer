@@ -412,8 +412,6 @@
         else if (timerState === "paused") handleResume();
         else if (timerState === "finished") handleReset();
         break;
-      case "r":
-      case "R":
       case "ArrowDown":
         if (timerState !== "idle") {
           event.preventDefault();
