@@ -685,6 +685,15 @@
       </svg>
     </button>
 
+    <!-- Mini pin indicator (compact/tiny mode only, shown when pinned) -->
+    {#if alwaysOnTop}
+      <button class="mini-pin-indicator" onclick={toggleAlwaysOnTop} aria-label="Unpin window">
+        <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M5.5 2.5L10.5 2.5L11 7L13 8.5V10H8.5V14.5L8 15.5L7.5 14.5V10H3V8.5L5 7Z" />
+        </svg>
+      </button>
+    {/if}
+
     <!-- Subtle texture overlay -->
     <div class="texture"></div>
 
@@ -1651,6 +1660,30 @@
     to { opacity: 1; transform: translateX(-50%) translateY(0); }
   }
 
+  /* Mini pin indicator — hidden in normal view, shown in compact/mini when pinned */
+  .mini-pin-indicator {
+    display: none;
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    z-index: 3;
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 4px;
+    background: rgba(196, 162, 101, 0.15);
+    color: var(--brass);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.2s ease;
+  }
+
+  .mini-pin-indicator:hover {
+    background: rgba(196, 162, 101, 0.3);
+  }
+
   /* Compact tier and below: hide secondary controls and tick marks */
   @media (max-width: 349px), (max-height: 399px) {
     .progress-ring line { display: none; }
@@ -1660,6 +1693,7 @@
     .reset-btn { display: none; }
     .remove-timer-btn { display: none; }
     .pin-btn { display: none; }
+    .mini-pin-indicator { display: flex; }
     .mini-btn { display: none; }
     .settings-btn { display: none; }
     .add-timer-btn { display: none; }
