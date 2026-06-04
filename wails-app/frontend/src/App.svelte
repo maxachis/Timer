@@ -764,7 +764,7 @@
               autofocus
             />
           {:else}
-            <button class="timer-name-label" onclick={startEditName} aria-label="Rename timer">
+            <button class="timer-name-label" onclick={startEditName} aria-label="Rename timer" style="--wails-draggable:no-drag">
               {activeName || `Timer ${activeIndex + 1}`}
             </button>
           {/if}
