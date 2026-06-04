@@ -699,7 +699,7 @@
 
     <!-- Timer face -->
     <div class="timer-face" class:has-mini-label={hasMultipleTimers} style="--wails-draggable:drag">
-      <svg class="progress-ring" viewBox="0 0 300 300" style="--wails-draggable:drag">
+      <svg class="progress-ring" viewBox="0 0 300 300" style="--wails-draggable:drag; pointer-events:none">
         <!-- Track -->
         <circle
           cx="150" cy="150" r={RADIUS}
@@ -764,7 +764,7 @@
               autofocus
             />
           {:else}
-            <button class="timer-name-label" onclick={startEditName} aria-label="Rename timer" style="--wails-draggable:no-drag">
+            <button class="timer-name-label" onclick={startEditName} aria-label="Rename timer">
               {activeName || `Timer ${activeIndex + 1}`}
             </button>
           {/if}
