@@ -2,6 +2,7 @@ package timer
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -170,7 +171,7 @@ func (c *TimerCollection) Count() int              { return len(c.timers) }
 
 func (c *TimerCollection) AddTimer(name string, durationSecs uint64) (int, error) {
 	if len(c.timers) >= MaxTimers {
-		return 0, errors.New("Maximum of 3 timers reached. Remove a timer before adding another.")
+		return 0, fmt.Errorf("Maximum of %d timers reached. Remove a timer before adding another.", MaxTimers)
 	}
 	c.timers = append(c.timers, &NamedTimer{Name: name, Timer: NewCountdownTimer(durationSecs)})
 	return len(c.timers) - 1, nil

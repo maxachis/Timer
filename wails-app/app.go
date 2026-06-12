@@ -11,6 +11,8 @@ import (
 	wruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+const autosaveInterval = 30 * time.Second
+
 type TimerStatus struct {
 	RemainingSecs float64 `json:"remaining_secs"`
 	State         string  `json:"state"`
@@ -21,11 +23,12 @@ type TimerStatus struct {
 }
 
 type App struct {
-	ctx      context.Context
-	mu       sync.Mutex
-	timers   *timer.TimerCollection
-	settings settings.AppSettings
-	store    *settings.Store
+	ctx            context.Context
+	mu             sync.Mutex
+	timers         *timer.TimerCollection
+	settings       settings.AppSettings
+	store          *settings.Store
+	cancelAutosave context.CancelFunc
 }
 
 func NewApp() *App {
@@ -50,7 +53,31 @@ func NewApp() *App {
 	}
 }
 
-func (a *App) startup(ctx context.Context) { a.ctx = ctx }
+func (a *App) startup(ctx context.Context) {
+	a.ctx = ctx
+	a.cancelAutosave = a.startAutosave(autosaveInterval)
+}
+
+func (a *App) startAutosave(interval time.Duration) context.CancelFunc {
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				a.mu.Lock()
+				if a.store != nil {
+					_ = a.store.SaveTimerStates(a.timers.Snapshot())
+				}
+				a.mu.Unlock()
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return cancel
+}
 
 func (a *App) domReady(ctx context.Context) {
 	installMinSizeOverride(ctx, "Timer", 50, 50)
@@ -60,6 +87,9 @@ func (a *App) domReady(ctx context.Context) {
 // Called from the Wails OnShutdown hook so that elapsed time and per-timer
 // state survive app restarts.
 func (a *App) PersistTimerStates() {
+	if a.cancelAutosave != nil {
+		a.cancelAutosave()
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.store == nil {
@@ -155,7 +185,7 @@ func (a *App) AddNewTimer(name string) (int, error) {
 		return 0, err
 	}
 	if a.store != nil {
-		_ = a.store.SaveTimerNames(a.timers.TimerNames())
+		_ = a.store.SaveTimerStates(a.timers.Snapshot())
 	}
 	return idx, nil
 }
@@ -167,7 +197,7 @@ func (a *App) RemoveExistingTimer(index int) error {
 		return err
 	}
 	if a.store != nil {
-		_ = a.store.SaveTimerNames(a.timers.TimerNames())
+		_ = a.store.SaveTimerStates(a.timers.Snapshot())
 	}
 	return nil
 }
@@ -188,7 +218,7 @@ func (a *App) RenameTimer(index int, name string) error {
 		return err
 	}
 	if a.store != nil {
-		_ = a.store.SaveTimerNames(a.timers.TimerNames())
+		_ = a.store.SaveTimerStates(a.timers.Snapshot())
 	}
 	return nil
 }

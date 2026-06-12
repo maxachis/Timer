@@ -2,6 +2,7 @@ package timer
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -165,6 +166,21 @@ func TestAddTimerMaxLimit(t *testing.T) {
 	}
 	if c.Count() != MaxTimers {
 		t.Fatalf("count should be %d", MaxTimers)
+	}
+}
+
+func TestAddTimerMaxLimitErrorMentionsActualLimit(t *testing.T) {
+	c := NewCollection(300)
+	for i := 2; i <= MaxTimers; i++ {
+		c.AddTimer(fmt.Sprintf("Timer %d", i), 300)
+	}
+	_, err := c.AddTimer("One too many", 300)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	want := fmt.Sprintf("%d", MaxTimers)
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("error message should reference the actual limit (%s), got: %q", want, err.Error())
 	}
 }
 
