@@ -6,7 +6,7 @@ import (
 )
 
 const DefaultIncrement = 5 * time.Minute
-const MaxTimers = 3
+const MaxTimers = 5
 
 type stateKind int
 

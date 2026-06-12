@@ -329,7 +329,7 @@
       await fetchStatus();
       await fetchTimerList();
     } catch (e) {
-      showToast("3 timer limit — remove one first");
+      showToast("5 timer limit — remove one first");
     }
   }
 

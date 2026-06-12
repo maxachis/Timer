@@ -1,6 +1,7 @@
 package timer
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -156,13 +157,14 @@ func TestAddTimer(t *testing.T) {
 
 func TestAddTimerMaxLimit(t *testing.T) {
 	c := NewCollection(300)
-	c.AddTimer("Two", 300)
-	c.AddTimer("Three", 300)
-	if _, err := c.AddTimer("Four", 300); err == nil {
+	for i := 2; i <= MaxTimers; i++ {
+		c.AddTimer(fmt.Sprintf("Timer %d", i), 300)
+	}
+	if _, err := c.AddTimer("One too many", 300); err == nil {
 		t.Fatal("expected max limit error")
 	}
-	if c.Count() != 3 {
-		t.Fatal("count should be 3")
+	if c.Count() != MaxTimers {
+		t.Fatalf("count should be %d", MaxTimers)
 	}
 }
 
