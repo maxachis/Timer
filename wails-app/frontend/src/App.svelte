@@ -23,7 +23,17 @@
     state: string;
     remaining_secs: number;
     is_active: boolean;
+    tint: string;
   }
+
+  const TINTS = [
+    { id: "none",     label: "None",     swatch: "transparent", wash: "transparent" },
+    { id: "rose",     label: "Rose",     swatch: "#d98a9c",     wash: "rgba(201,100,120,0.22)" },
+    { id: "sage",     label: "Sage",     swatch: "#9cb890",     wash: "rgba(126,154,116,0.24)" },
+    { id: "sky",      label: "Sky",      swatch: "#8db4dc",     wash: "rgba(96,146,194,0.22)" },
+    { id: "lavender", label: "Lavender", swatch: "#b6a0dc",     wash: "rgba(150,122,196,0.22)" },
+    { id: "amber",    label: "Amber",    swatch: "#e0a866",     wash: "rgba(212,140,60,0.24)" },
+  ];
 
   let remainingSecs = $state(300);
   let timerState = $state("idle");
@@ -54,8 +64,11 @@
   let toastTimeout: ReturnType<typeof setTimeout> | null = $state(null);
   let editingName = $state(false);
   let editNameValue = $state("");
+  let showTintMenu = $state(false);
 
   let hasMultipleTimers = $derived(timerCount > 1);
+  let activeTintId = $derived(timerList.find((t) => t.is_active)?.tint || "none");
+  let activeTintWash = $derived(TINTS.find((t) => t.id === activeTintId)?.wash ?? "transparent");
 
   let incrementLabel = $derived(Math.round(incrementSecs / 60) + " min");
   let secondaryIncrementLabel = $derived(Math.round(secondaryIncrementSecs / 60) + " min");
@@ -343,6 +356,12 @@
     }
   }
 
+  async function handleSetTint(tintId: string) {
+    showTintMenu = false;
+    await invoke("set_timer_tint", { index: activeIndex, tint: tintId });
+    await fetchTimerList();
+  }
+
   async function handleSwitchTimer(index: number) {
     if (timerState === "running") playStopBlip();
     if (pollInterval) {
@@ -511,7 +530,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Anybody:wght@300;400;500&display=swap" rel="stylesheet" />
 </svelte:head>
 
-<main style={showSettings ? "--wails-draggable:no-drag" : "--wails-draggable:drag"} class:finished={isFinished} class:running={timerState === "running"} class:paused={timerState === "paused"}>
+<main style={`${showSettings ? "--wails-draggable:no-drag" : "--wails-draggable:drag"};--timer-tint:${activeTintWash}`} class:finished={isFinished} class:running={timerState === "running"} class:paused={timerState === "paused"}>
   {#if showSettings}
     <!-- Settings view -->
     <div class="texture"></div>
@@ -669,6 +688,27 @@
         <line x1="1" y1="6" x2="11" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
       </svg>
     </button>
+
+    <!-- Tint picker -->
+    <button class="tint-btn" onclick={() => (showTintMenu = !showTintMenu)} aria-label="Background tint">
+      <span class="tint-btn-dot" style={`background:${TINTS.find((t) => t.id === activeTintId)?.swatch ?? "transparent"}`}></span>
+    </button>
+    {#if showTintMenu}
+      <button class="tint-backdrop" onclick={() => (showTintMenu = false)} aria-label="Close tint menu"></button>
+      <div class="tint-popover">
+        {#each TINTS as t}
+          <button
+            class="tint-swatch"
+            class:selected={t.id === activeTintId}
+            class:none={t.id === "none"}
+            style={`background:${t.swatch}`}
+            onclick={() => handleSetTint(t.id)}
+            aria-label={t.label}
+            title={t.label}
+          ></button>
+        {/each}
+      </div>
+    {/if}
 
     <!-- Minimize button -->
     <button class="window-btn minimize-btn" onclick={handleMinimize} aria-label="Minimize">
@@ -982,6 +1022,7 @@
     min-height: 100vh;
     padding: clamp(0.5rem, 3vmin, 2rem) clamp(0.25rem, 2vmin, 1.5rem);
     position: relative;
+    background-color: var(--timer-tint, transparent);
     transition: background-color 0.6s ease;
   }
 
@@ -1467,6 +1508,88 @@
     transform: translateY(-1px);
   }
 
+  /* Background tint picker */
+  .tint-btn {
+    position: absolute;
+    top: 1rem;
+    left: 3.5rem;
+    z-index: 2;
+    width: 32px;
+    height: 32px;
+    border: 1px solid #e0dbd3;
+    border-radius: 8px;
+    background: white;
+    color: var(--stone);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow-btn);
+    transition: all 0.2s ease;
+    opacity: 0.6;
+  }
+
+  .tint-btn:hover {
+    opacity: 1;
+    box-shadow: var(--shadow-btn-hover);
+    transform: translateY(-1px);
+  }
+
+  .tint-btn-dot {
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid var(--stone);
+  }
+
+  .tint-backdrop {
+    position: fixed;
+    inset: 0;
+    background: transparent;
+    border: none;
+    z-index: 20;
+    --wails-draggable: no-drag;
+  }
+
+  .tint-popover {
+    position: absolute;
+    top: 3.75rem;
+    left: 3.5rem;
+    display: flex;
+    gap: 6px;
+    padding: 8px;
+    background: var(--warm-white);
+    border: 1px solid var(--ring-track);
+    border-radius: 10px;
+    box-shadow: var(--shadow-btn);
+    z-index: 21;
+    --wails-draggable: no-drag;
+  }
+
+  .tint-swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1px solid var(--stone);
+    cursor: pointer;
+    padding: 0;
+    transition: transform 0.12s ease;
+  }
+
+  .tint-swatch:hover {
+    transform: scale(1.15);
+  }
+
+  .tint-swatch.selected {
+    box-shadow: 0 0 0 2px var(--brass);
+  }
+
+  .tint-swatch.none {
+    background: white !important;
+    background-image: linear-gradient(45deg, transparent 43%, var(--amber-alert) 45%, var(--amber-alert) 55%, transparent 57%) !important;
+  }
+
   /* Window controls (minimize / close) */
   .window-btn {
     position: absolute;
@@ -1697,6 +1820,8 @@
     .mini-btn { display: none; }
     .settings-btn { display: none; }
     .add-timer-btn { display: none; }
+    .tint-btn { display: none; }
+    .tint-popover, .tint-backdrop { display: none; }
     .window-btn { display: none; }
     .timer-name-area { display: none; }
 

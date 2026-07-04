@@ -42,6 +42,10 @@ export function PauseTimer() {
   return window['go']['main']['App']['PauseTimer']();
 }
 
+export function PersistTimerStates() {
+  return window['go']['main']['App']['PersistTimerStates']();
+}
+
 export function RemoveExistingTimer(arg1) {
   return window['go']['main']['App']['RemoveExistingTimer'](arg1);
 }
@@ -80,6 +84,10 @@ export function SaveSettings(arg1) {
 
 export function SetAlwaysOnTop(arg1) {
   return window['go']['main']['App']['SetAlwaysOnTop'](arg1);
+}
+
+export function SetTimerTint(arg1, arg2) {
+  return window['go']['main']['App']['SetTimerTint'](arg1, arg2);
 }
 
 export function SetWindowSize(arg1, arg2) {

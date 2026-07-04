@@ -462,3 +462,47 @@ func TestRestoreCapsToMaxTimers(t *testing.T) {
 		t.Fatalf("expected count capped at %d, got %d", MaxTimers, r.Count())
 	}
 }
+
+func TestSetTintRoundTrip(t *testing.T) {
+	c := NewCollection(300)
+	if err := c.SetTint(0, "rose"); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	snap := c.Snapshot()
+	r := RestoreCollection(snap, 300)
+	if r.TimerList()[0].Tint != "rose" {
+		t.Fatalf("expected tint 'rose' after restore, got %q", r.TimerList()[0].Tint)
+	}
+}
+
+func TestTintDroppedOnRemove(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("B", 300)
+	c.SetTint(0, "rose")
+	if err := c.RemoveTimer(0); err != nil {
+		t.Fatal(err)
+	}
+	if c.TimerList()[0].Tint != "" {
+		t.Fatalf("expected empty tint on remaining timer, got %q", c.TimerList()[0].Tint)
+	}
+}
+
+func TestSetTintNoneStoresEmpty(t *testing.T) {
+	c := NewCollection(300)
+	if err := c.SetTint(0, "none"); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if c.TimerList()[0].Tint != "" {
+		t.Fatalf("expected empty tint for 'none', got %q", c.TimerList()[0].Tint)
+	}
+}
+
+func TestSetTintInvalid(t *testing.T) {
+	c := NewCollection(300)
+	if err := c.SetTint(0, "bogus"); err == nil {
+		t.Fatal("expected error for invalid tint id")
+	}
+	if err := c.SetTint(5, "rose"); err == nil {
+		t.Fatal("expected error for out-of-range index")
+	}
+}

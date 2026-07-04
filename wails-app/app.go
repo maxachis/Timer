@@ -223,6 +223,18 @@ func (a *App) RenameTimer(index int, name string) error {
 	return nil
 }
 
+func (a *App) SetTimerTint(index int, tint string) error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if err := a.timers.SetTint(index, tint); err != nil {
+		return err
+	}
+	if a.store != nil {
+		_ = a.store.SaveTimerStates(a.timers.Snapshot())
+	}
+	return nil
+}
+
 func (a *App) GetSettings() settings.AppSettings {
 	a.mu.Lock()
 	defer a.mu.Unlock()

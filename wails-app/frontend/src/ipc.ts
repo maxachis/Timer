@@ -66,6 +66,8 @@ export async function invoke<T = unknown>(cmd: string, args?: Args): Promise<T> 
       return (await App.SwitchTimerPrev()) as T;
     case "rename_timer":
       return (await App.RenameTimer((a as any).index, (a as any).name)) as T;
+    case "set_timer_tint":
+      return (await App.SetTimerTint((a as any).index, (a as any).tint)) as T;
     case "get_settings":
       return (await App.GetSettings()) as T;
     case "save_settings":

@@ -60,6 +60,7 @@ export namespace timer {
 	    state: string;
 	    remaining_secs: number;
 	    is_active: boolean;
+	    tint: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new TimerInfo(source);
@@ -72,6 +73,7 @@ export namespace timer {
 	        this.state = source["state"];
 	        this.remaining_secs = source["remaining_secs"];
 	        this.is_active = source["is_active"];
+	        this.tint = source["tint"];
 	    }
 	}
 

@@ -24,6 +24,8 @@ export function GetTimerStatus():Promise<main.TimerStatus>;
 
 export function PauseTimer():Promise<void>;
 
+export function PersistTimerStates():Promise<void>;
+
 export function RemoveExistingTimer(arg1:number):Promise<void>;
 
 export function RemoveTime():Promise<void>;
@@ -43,6 +45,8 @@ export function ResumeTimer():Promise<void>;
 export function SaveSettings(arg1:settings.AppSettings):Promise<void>;
 
 export function SetAlwaysOnTop(arg1:boolean):Promise<void>;
+
+export function SetTimerTint(arg1:number,arg2:string):Promise<void>;
 
 export function SetWindowSize(arg1:number,arg2:number):Promise<void>;
 

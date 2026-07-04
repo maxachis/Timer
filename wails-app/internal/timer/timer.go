@@ -127,6 +127,7 @@ func (t *CountdownTimer) Reset() {
 type NamedTimer struct {
 	Name  string
 	Timer *CountdownTimer
+	Tint  string
 }
 
 type TimerInfo struct {
@@ -135,6 +136,28 @@ type TimerInfo struct {
 	State         string  `json:"state"`
 	RemainingSecs float64 `json:"remaining_secs"`
 	IsActive      bool    `json:"is_active"`
+	Tint          string  `json:"tint"`
+}
+
+var validTints = map[string]bool{
+	"": true, "none": true, "rose": true, "sage": true,
+	"sky": true, "lavender": true, "amber": true,
+}
+
+// SetTint sets the background tint id for the timer at index. "none" is
+// normalised to an empty string. Unknown ids or out-of-range indexes error.
+func (c *TimerCollection) SetTint(index int, tint string) error {
+	if index < 0 || index >= len(c.timers) {
+		return errors.New("Invalid timer index")
+	}
+	if !validTints[tint] {
+		return errors.New("Invalid tint")
+	}
+	if tint == "none" {
+		tint = ""
+	}
+	c.timers[index].Tint = tint
+	return nil
 }
 
 type TimerCollection struct {
@@ -241,6 +264,7 @@ func (c *TimerCollection) TimerList() []TimerInfo {
 			State:         t.Timer.StateName(),
 			RemainingSecs: t.Timer.Remaining().Seconds(),
 			IsActive:      i == c.activeIndex,
+			Tint:          t.Tint,
 		}
 	}
 	return out
@@ -272,6 +296,7 @@ type TimerSnapshot struct {
 	DurationMs         uint64 `json:"duration_ms"`
 	ElapsedMs          uint64 `json:"elapsed_ms"`
 	State              string `json:"state"` // "idle" | "paused" | "finished"
+	Tint               string `json:"tint"`
 }
 
 // CollectionSnapshot is the serialisable view of a TimerCollection.
@@ -307,6 +332,7 @@ func (c *TimerCollection) Snapshot() CollectionSnapshot {
 			DurationMs:         dur,
 			ElapsedMs:          elapsed,
 			State:              state,
+			Tint:               nt.Tint,
 		}
 	}
 	return out
@@ -353,6 +379,7 @@ func RestoreCollection(snap CollectionSnapshot, defaultDurationSecs uint64) *Tim
 		ts = append(ts, &NamedTimer{
 			Name:  snap.Timers[i].Name,
 			Timer: restoreTimer(snap.Timers[i], defaultDurationSecs),
+			Tint:  snap.Timers[i].Tint,
 		})
 	}
 	active := snap.ActiveIndex
