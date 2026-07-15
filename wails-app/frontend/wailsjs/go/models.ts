@@ -7,6 +7,8 @@ export namespace main {
 	    active_index: number;
 	    active_name: string;
 	    timer_count: number;
+	    on_break: boolean;
+	    break_index: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new TimerStatus(source);
@@ -20,6 +22,8 @@ export namespace main {
 	        this.active_index = source["active_index"];
 	        this.active_name = source["active_name"];
 	        this.timer_count = source["timer_count"];
+	        this.on_break = source["on_break"];
+	        this.break_index = source["break_index"];
 	    }
 	}
 
@@ -61,6 +65,8 @@ export namespace timer {
 	    remaining_secs: number;
 	    is_active: boolean;
 	    tint: string;
+	    original_duration_secs: number;
+	    is_break_timer: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new TimerInfo(source);
@@ -74,6 +80,8 @@ export namespace timer {
 	        this.remaining_secs = source["remaining_secs"];
 	        this.is_active = source["is_active"];
 	        this.tint = source["tint"];
+	        this.original_duration_secs = source["original_duration_secs"];
+	        this.is_break_timer = source["is_break_timer"];
 	    }
 	}
 

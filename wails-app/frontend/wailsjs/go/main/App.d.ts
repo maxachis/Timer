@@ -4,6 +4,12 @@ import {settings} from '../models';
 import {timer} from '../models';
 import {main} from '../models';
 
+export function AddBreakTime():Promise<void>;
+
+export function AddBreakTimeSecondary():Promise<void>;
+
+export function AddBreakTimeTertiary():Promise<void>;
+
 export function AddNewTimer(arg1:string):Promise<number>;
 
 export function AddTime():Promise<void>;
@@ -25,6 +31,12 @@ export function GetTimerStatus():Promise<main.TimerStatus>;
 export function PauseTimer():Promise<void>;
 
 export function PersistTimerStates():Promise<void>;
+
+export function RemoveBreakTime():Promise<void>;
+
+export function RemoveBreakTimeSecondary():Promise<void>;
+
+export function RemoveBreakTimeTertiary():Promise<void>;
 
 export function RemoveExistingTimer(arg1:number):Promise<void>;
 
@@ -57,3 +69,7 @@ export function SwitchTimer(arg1:number):Promise<void>;
 export function SwitchTimerNext():Promise<void>;
 
 export function SwitchTimerPrev():Promise<void>;
+
+export function ToggleBreak():Promise<void>;
+
+export function ToggleBreakTimer():Promise<void>;

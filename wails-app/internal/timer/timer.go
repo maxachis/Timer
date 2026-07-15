@@ -131,17 +131,19 @@ type NamedTimer struct {
 }
 
 type TimerInfo struct {
-	Index         int     `json:"index"`
-	Name          string  `json:"name"`
-	State         string  `json:"state"`
-	RemainingSecs float64 `json:"remaining_secs"`
-	IsActive      bool    `json:"is_active"`
-	Tint          string  `json:"tint"`
+	Index                int     `json:"index"`
+	Name                 string  `json:"name"`
+	State                string  `json:"state"`
+	RemainingSecs        float64 `json:"remaining_secs"`
+	IsActive             bool    `json:"is_active"`
+	Tint                 string  `json:"tint"`
+	OriginalDurationSecs float64 `json:"original_duration_secs"`
+	IsBreakTimer         bool    `json:"is_break_timer"`
 }
 
 var validTints = map[string]bool{
 	"": true, "none": true, "rose": true, "sage": true,
-	"sky": true, "lavender": true, "amber": true,
+	"sky": true, "lavender": true, "amber": true, "teal": true, "clay": true,
 }
 
 // SetTint sets the background tint id for the timer at index. "none" is
@@ -161,14 +163,19 @@ func (c *TimerCollection) SetTint(index int, tint string) error {
 }
 
 type TimerCollection struct {
-	timers      []*NamedTimer
-	activeIndex int
+	timers          []*NamedTimer
+	activeIndex     int
+	breakIndex      int
+	onBreak         bool
+	preBreakActive  int
+	preBreakRunning bool
 }
 
 func NewCollection(defaultDurationSecs uint64) *TimerCollection {
 	return &TimerCollection{
 		timers:      []*NamedTimer{{Name: "", Timer: NewCountdownTimer(defaultDurationSecs)}},
 		activeIndex: 0,
+		breakIndex:  -1,
 	}
 }
 
@@ -184,7 +191,7 @@ func FromNames(names []string, defaultDurationSecs uint64) *TimerCollection {
 	for i := 0; i < n; i++ {
 		ts = append(ts, &NamedTimer{Name: names[i], Timer: NewCountdownTimer(defaultDurationSecs)})
 	}
-	return &TimerCollection{timers: ts, activeIndex: 0}
+	return &TimerCollection{timers: ts, activeIndex: 0, breakIndex: -1}
 }
 
 func (c *TimerCollection) Active() *CountdownTimer { return c.timers[c.activeIndex].Timer }
@@ -207,6 +214,14 @@ func (c *TimerCollection) RemoveTimer(index int) error {
 	if index < 0 || index >= len(c.timers) {
 		return errors.New("Invalid timer index")
 	}
+	if index == c.breakIndex {
+		if c.onBreak {
+			c.EndBreak()
+		}
+		c.breakIndex = -1
+	} else if index < c.breakIndex {
+		c.breakIndex--
+	}
 	c.timers = append(c.timers[:index], c.timers[index+1:]...)
 	if c.activeIndex >= len(c.timers) {
 		c.activeIndex = len(c.timers) - 1
@@ -214,6 +229,91 @@ func (c *TimerCollection) RemoveTimer(index int) error {
 		c.activeIndex--
 	}
 	return nil
+}
+
+// BreakIndex returns the index of the designated break timer, or -1 if none.
+func (c *TimerCollection) BreakIndex() int { return c.breakIndex }
+
+// IsOnBreak reports whether the collection is currently in break mode.
+func (c *TimerCollection) IsOnBreak() bool { return c.onBreak }
+
+// ToggleBreakDesignation designates the currently-active timer as the break
+// timer, or clears the designation if it is already the break timer.
+func (c *TimerCollection) ToggleBreakDesignation() {
+	if c.breakIndex == c.activeIndex {
+		c.breakIndex = -1
+		if c.onBreak {
+			c.EndBreak()
+		}
+	} else {
+		c.breakIndex = c.activeIndex
+	}
+}
+
+// StartBreak pauses the active timer, remembers it, and switches to and
+// starts/resumes the designated break timer. Errors if no break timer is
+// designated. A no-op if already on break.
+func (c *TimerCollection) StartBreak() error {
+	if c.breakIndex < 0 {
+		return errors.New("No break timer designated")
+	}
+	if c.onBreak {
+		return nil
+	}
+	c.preBreakActive = c.activeIndex
+	c.preBreakRunning = c.timers[c.activeIndex].Timer.kind == stateRunning
+	c.timers[c.activeIndex].Timer.Pause()
+	c.onBreak = true
+	c.activeIndex = c.breakIndex
+	bt := c.timers[c.breakIndex].Timer
+	switch bt.kind {
+	case stateIdle:
+		bt.Start()
+	case statePaused:
+		bt.Resume()
+	}
+	return nil
+}
+
+// EndBreak pauses the break timer and restores the previously-active timer,
+// resuming it if it had been running. A no-op if not on break.
+func (c *TimerCollection) EndBreak() {
+	if !c.onBreak {
+		return
+	}
+	c.timers[c.breakIndex].Timer.Pause()
+	c.onBreak = false
+	if c.preBreakActive >= 0 && c.preBreakActive < len(c.timers) {
+		c.activeIndex = c.preBreakActive
+		if c.preBreakRunning {
+			c.timers[c.activeIndex].Timer.Resume()
+		}
+	}
+}
+
+// ToggleBreak starts break mode if not on break, or ends it if already on break.
+func (c *TimerCollection) ToggleBreak() error {
+	if c.onBreak {
+		c.EndBreak()
+		return nil
+	}
+	return c.StartBreak()
+}
+
+// AddBreakTime adds time to the designated break timer, if any.
+func (c *TimerCollection) AddBreakTime(amount time.Duration) {
+	if c.breakIndex < 0 {
+		return
+	}
+	c.timers[c.breakIndex].Timer.AddTime(amount)
+}
+
+// RemoveBreakTime removes time from the designated break timer, if any.
+func (c *TimerCollection) RemoveBreakTime(amount time.Duration) {
+	if c.breakIndex < 0 {
+		return
+	}
+	c.timers[c.breakIndex].Timer.RemoveTime(amount)
 }
 
 func (c *TimerCollection) SwitchTo(index int) error {
@@ -259,12 +359,14 @@ func (c *TimerCollection) TimerList() []TimerInfo {
 	out := make([]TimerInfo, len(c.timers))
 	for i, t := range c.timers {
 		out[i] = TimerInfo{
-			Index:         i,
-			Name:          t.Name,
-			State:         t.Timer.StateName(),
-			RemainingSecs: t.Timer.Remaining().Seconds(),
-			IsActive:      i == c.activeIndex,
-			Tint:          t.Tint,
+			Index:                i,
+			Name:                 t.Name,
+			State:                t.Timer.StateName(),
+			RemainingSecs:        t.Timer.Remaining().Seconds(),
+			IsActive:             i == c.activeIndex,
+			Tint:                 t.Tint,
+			OriginalDurationSecs: t.Timer.originalDuration.Seconds(),
+			IsBreakTimer:         i == c.breakIndex,
 		}
 	}
 	return out
@@ -386,5 +488,5 @@ func RestoreCollection(snap CollectionSnapshot, defaultDurationSecs uint64) *Tim
 	if active < 0 || active >= len(ts) {
 		active = 0
 	}
-	return &TimerCollection{timers: ts, activeIndex: active}
+	return &TimerCollection{timers: ts, activeIndex: active, breakIndex: -1}
 }

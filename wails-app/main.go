@@ -19,7 +19,7 @@ func main() {
 	// Create application with options
 	err := wails.Run(&options.App{
 		Title:     "Timer",
-		Width:     400,
+		Width:     560,
 		Height:    600,
 		MinWidth:  50,
 		MinHeight: 50,

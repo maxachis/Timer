@@ -20,6 +20,8 @@ type TimerStatus struct {
 	ActiveIndex   int     `json:"active_index"`
 	ActiveName    string  `json:"active_name"`
 	TimerCount    int     `json:"timer_count"`
+	OnBreak       bool    `json:"on_break"`
+	BreakIndex    int     `json:"break_index"`
 }
 
 type App struct {
@@ -109,6 +111,8 @@ func (a *App) GetTimerStatus() TimerStatus {
 		ActiveIndex:   a.timers.ActiveIndex(),
 		ActiveName:    a.timers.ActiveName(),
 		TimerCount:    a.timers.Count(),
+		OnBreak:       a.timers.IsOnBreak(),
+		BreakIndex:    a.timers.BreakIndex(),
 	}
 }
 
@@ -233,6 +237,57 @@ func (a *App) SetTimerTint(index int, tint string) error {
 		_ = a.store.SaveTimerStates(a.timers.Snapshot())
 	}
 	return nil
+}
+
+func (a *App) ToggleBreakTimer() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.timers.ToggleBreakDesignation()
+	if a.store != nil {
+		_ = a.store.SaveTimerStates(a.timers.Snapshot())
+	}
+}
+
+func (a *App) ToggleBreak() error {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.timers.ToggleBreak()
+}
+
+func (a *App) AddBreakTime() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.timers.AddBreakTime(time.Duration(a.settings.DefaultIncrementSecs) * time.Second)
+}
+
+func (a *App) RemoveBreakTime() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.timers.RemoveBreakTime(time.Duration(a.settings.DefaultIncrementSecs) * time.Second)
+}
+
+func (a *App) AddBreakTimeSecondary() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.timers.AddBreakTime(time.Duration(a.settings.SecondaryIncrementSecs) * time.Second)
+}
+
+func (a *App) RemoveBreakTimeSecondary() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.timers.RemoveBreakTime(time.Duration(a.settings.SecondaryIncrementSecs) * time.Second)
+}
+
+func (a *App) AddBreakTimeTertiary() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.timers.AddBreakTime(time.Duration(a.settings.TertiaryIncrementSecs) * time.Second)
+}
+
+func (a *App) RemoveBreakTimeTertiary() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.timers.RemoveBreakTime(time.Duration(a.settings.TertiaryIncrementSecs) * time.Second)
 }
 
 func (a *App) GetSettings() settings.AppSettings {

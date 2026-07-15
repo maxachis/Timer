@@ -98,6 +98,20 @@ func TestResetFromRunning(t *testing.T) {
 	}
 }
 
+func TestTimerListReportsOriginalDuration(t *testing.T) {
+	c := NewCollection(300)
+	c.Active().Start()
+	c.Active().AddTime(120 * time.Second)
+
+	list := c.TimerList()
+	if len(list) != 1 {
+		t.Fatalf("expected 1 timer, got %d", len(list))
+	}
+	if list[0].OriginalDurationSecs != 300 {
+		t.Fatalf("expected original duration 300, got %v", list[0].OriginalDurationSecs)
+	}
+}
+
 func TestResetFromPaused(t *testing.T) {
 	tm := NewCountdownTimer(300)
 	tm.Start()
@@ -494,6 +508,132 @@ func TestSetTintNoneStoresEmpty(t *testing.T) {
 	}
 	if c.TimerList()[0].Tint != "" {
 		t.Fatalf("expected empty tint for 'none', got %q", c.TimerList()[0].Tint)
+	}
+}
+
+func TestNewCollectionBreakIndexDefaultsToNegOne(t *testing.T) {
+	c := NewCollection(300)
+	if c.BreakIndex() != -1 {
+		t.Fatalf("expected -1, got %d", c.BreakIndex())
+	}
+}
+
+func TestToggleBreakDesignationSetsAndClears(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("Break", 300)
+	c.SwitchTo(1)
+	c.ToggleBreakDesignation()
+	if c.BreakIndex() != 1 {
+		t.Fatalf("expected break index 1, got %d", c.BreakIndex())
+	}
+	c.ToggleBreakDesignation()
+	if c.BreakIndex() != -1 {
+		t.Fatalf("expected break index cleared, got %d", c.BreakIndex())
+	}
+}
+
+func TestStartBreakWithNoBreakTimerErrors(t *testing.T) {
+	c := NewCollection(300)
+	if err := c.StartBreak(); err == nil {
+		t.Fatal("expected error when no break timer designated")
+	}
+}
+
+func TestStartBreakPausesPreviousAndActivatesBreakTimer(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("Break", 120)
+	c.SwitchTo(1)
+	c.ToggleBreakDesignation()
+	c.SwitchTo(0)
+	c.Active().Start()
+
+	if err := c.StartBreak(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !c.IsOnBreak() {
+		t.Fatal("expected onBreak true")
+	}
+	if c.ActiveIndex() != 1 {
+		t.Fatalf("expected active index 1, got %d", c.ActiveIndex())
+	}
+	if c.TimerAt(0).StateName() != "paused" {
+		t.Fatalf("expected previous timer paused, got %q", c.TimerAt(0).StateName())
+	}
+	if c.TimerAt(1).StateName() != "running" {
+		t.Fatalf("expected break timer running, got %q", c.TimerAt(1).StateName())
+	}
+}
+
+func TestEndBreakRestoresPreviousActiveAndResumesIfRunning(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("Break", 120)
+	c.SwitchTo(1)
+	c.ToggleBreakDesignation()
+	c.SwitchTo(0)
+	c.Active().Start()
+
+	if err := c.StartBreak(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	c.EndBreak()
+	if c.IsOnBreak() {
+		t.Fatal("expected onBreak false after EndBreak")
+	}
+	if c.ActiveIndex() != 0 {
+		t.Fatalf("expected active index restored to 0, got %d", c.ActiveIndex())
+	}
+	if c.TimerAt(0).StateName() != "running" {
+		t.Fatalf("expected previously-running timer resumed, got %q", c.TimerAt(0).StateName())
+	}
+	if c.TimerAt(1).StateName() != "paused" {
+		t.Fatalf("expected break timer paused, got %q", c.TimerAt(1).StateName())
+	}
+}
+
+func TestEndBreakDoesNotResumeIfNotPreviouslyRunning(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("Break", 120)
+	c.SwitchTo(1)
+	c.ToggleBreakDesignation()
+	c.SwitchTo(0)
+	// Active timer 0 is idle (never started).
+
+	if err := c.StartBreak(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	c.EndBreak()
+	if c.TimerAt(0).StateName() != "idle" {
+		t.Fatalf("expected timer 0 still idle, got %q", c.TimerAt(0).StateName())
+	}
+}
+
+func TestRemoveTimerOnBreakIndexResetsToNegOne(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("Break", 120)
+	c.SwitchTo(1)
+	c.ToggleBreakDesignation()
+	c.SwitchTo(0)
+
+	if err := c.RemoveTimer(1); err != nil {
+		t.Fatal(err)
+	}
+	if c.BreakIndex() != -1 {
+		t.Fatalf("expected break index reset to -1, got %d", c.BreakIndex())
+	}
+}
+
+func TestRemoveTimerBeforeBreakIndexDecrements(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("Middle", 300)
+	c.AddTimer("Break", 120)
+	c.SwitchTo(2)
+	c.ToggleBreakDesignation()
+
+	if err := c.RemoveTimer(0); err != nil {
+		t.Fatal(err)
+	}
+	if c.BreakIndex() != 1 {
+		t.Fatalf("expected break index decremented to 1, got %d", c.BreakIndex())
 	}
 }
 
