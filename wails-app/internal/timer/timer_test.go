@@ -637,6 +637,132 @@ func TestRemoveTimerBeforeBreakIndexDecrements(t *testing.T) {
 	}
 }
 
+func TestAddBreakTimeAccruesUpToRemaining(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("Break", 120)
+	c.SwitchTo(1)
+	c.ToggleBreakDesignation()
+
+	remaining := c.TimerAt(1).Remaining()
+	c.AddBreakTime(remaining + time.Hour)
+	if c.BreakAccrued() != remaining {
+		t.Fatalf("expected accrued clamped to remaining %v, got %v", remaining, c.BreakAccrued())
+	}
+}
+
+func TestAddBreakTimeAccumulates(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("Break", 120)
+	c.SwitchTo(1)
+	c.ToggleBreakDesignation()
+
+	c.AddBreakTime(10 * time.Second)
+	c.AddBreakTime(20 * time.Second)
+	if got := c.BreakAccrued(); got != 30*time.Second {
+		t.Fatalf("expected accrued 30s, got %v", got)
+	}
+}
+
+func TestRemoveBreakTimeFloorsAtZero(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("Break", 120)
+	c.SwitchTo(1)
+	c.ToggleBreakDesignation()
+
+	c.AddBreakTime(10 * time.Second)
+	c.RemoveBreakTime(30 * time.Second)
+	if got := c.BreakAccrued(); got != 0 {
+		t.Fatalf("expected accrued floored to 0, got %v", got)
+	}
+}
+
+func TestAddBreakTimeNoBreakTimerIsNoop(t *testing.T) {
+	c := NewCollection(300)
+	c.AddBreakTime(10 * time.Second)
+	if got := c.BreakAccrued(); got != 0 {
+		t.Fatalf("expected accrued 0 with no break timer, got %v", got)
+	}
+}
+
+func TestChangingBreakDesignationResetsAccrual(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("Break", 120)
+	c.SwitchTo(1)
+	c.ToggleBreakDesignation()
+
+	c.AddBreakTime(10 * time.Second)
+	c.ToggleBreakDesignation()
+	if got := c.BreakAccrued(); got != 0 {
+		t.Fatalf("expected accrued reset to 0, got %v", got)
+	}
+}
+
+func TestSetMaxToRemainingCommitsCurrentAsResetTarget(t *testing.T) {
+	tm := NewCountdownTimer(3600)
+	tm.Start()
+	tm.AddTime(600 * time.Second)
+	tm.SetMaxToRemaining()
+	tm.Reset()
+	r := tm.Remaining()
+	if r <= 4199*time.Second || r > 4200*time.Second {
+		t.Fatalf("expected reset to land near 4200s, got %v", r)
+	}
+}
+
+func TestSetMaxToRemainingUpdatesOriginalDuration(t *testing.T) {
+	tm := NewCountdownTimer(3600)
+	tm.Start()
+	tm.AddTime(600 * time.Second)
+	tm.SetMaxToRemaining()
+	if tm.originalDuration <= 4199*time.Second || tm.originalDuration > 4200*time.Second {
+		t.Fatalf("expected originalDuration near 4200s, got %v", tm.originalDuration)
+	}
+}
+
+func TestSetMaxToRemainingPreservesPausedTime(t *testing.T) {
+	tm := NewCountdownTimer(3600)
+	tm.Start()
+	tm.Pause()
+	tm.RemoveTime(600 * time.Second)
+	tm.SetMaxToRemaining()
+	if tm.StateName() != "paused" {
+		t.Fatalf("expected still paused, got %q", tm.StateName())
+	}
+	r := tm.Remaining()
+	if r <= 2999*time.Second || r > 3000*time.Second {
+		t.Fatalf("expected remaining near 3000s, got %v", r)
+	}
+}
+
+func TestSetMaxToRemainingFinishedIsNoop(t *testing.T) {
+	tm := NewCountdownTimer(60)
+	tm.Start()
+	tm.RemoveTime(60 * time.Second)
+	before := tm.originalDuration
+	tm.SetMaxToRemaining()
+	if tm.originalDuration != before {
+		t.Fatalf("expected originalDuration unchanged, got %v vs %v", tm.originalDuration, before)
+	}
+}
+
+func TestSetMaxToCurrentActsOnActiveTimer(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("Second", 600)
+	c.SwitchTo(1)
+	c.Active().Start()
+	c.Active().AddTime(120 * time.Second)
+	otherOriginal := c.TimerAt(0).originalDuration
+
+	c.SetMaxToCurrent()
+
+	if c.TimerAt(1).originalDuration <= 719*time.Second || c.TimerAt(1).originalDuration > 720*time.Second {
+		t.Fatalf("expected active timer's originalDuration near 720s, got %v", c.TimerAt(1).originalDuration)
+	}
+	if c.TimerAt(0).originalDuration != otherOriginal {
+		t.Fatalf("expected inactive timer's originalDuration untouched, got %v vs %v", c.TimerAt(0).originalDuration, otherOriginal)
+	}
+}
+
 func TestSetTintInvalid(t *testing.T) {
 	c := NewCollection(300)
 	if err := c.SetTint(0, "bogus"); err == nil {

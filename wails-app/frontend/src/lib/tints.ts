@@ -18,6 +18,7 @@ export interface TimerListEntry {
   tint: string;
   original_duration_secs: number;
   is_break_timer: boolean;
+  break_accrued_secs: number;
 }
 
 export const TINTS = [

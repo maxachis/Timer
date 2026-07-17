@@ -124,6 +124,27 @@ func (t *CountdownTimer) Reset() {
 	t.pausedElapsed = 0
 }
 
+// SetMaxToRemaining commits the timer's current remaining time as its
+// original duration: both the value Reset() restores and the maximum its
+// stacked-bar lane is scaled against. The timer keeps its run state and its
+// displayed time; only the baseline moves. A no-op on a finished/zero timer,
+// since a zero maximum would collapse the lane.
+func (t *CountdownTimer) SetMaxToRemaining() {
+	remaining := t.Remaining()
+	if remaining <= 0 {
+		return
+	}
+	t.originalDuration = remaining
+	t.duration = remaining
+	t.previouslyElapsed = 0
+	t.pausedElapsed = 0
+	if t.kind == stateRunning {
+		t.startedAt = time.Now()
+	} else if t.kind == stateFinished {
+		t.kind = stateIdle
+	}
+}
+
 type NamedTimer struct {
 	Name  string
 	Timer *CountdownTimer
@@ -139,6 +160,7 @@ type TimerInfo struct {
 	Tint                 string  `json:"tint"`
 	OriginalDurationSecs float64 `json:"original_duration_secs"`
 	IsBreakTimer         bool    `json:"is_break_timer"`
+	BreakAccruedSecs     float64 `json:"break_accrued_secs"`
 }
 
 var validTints = map[string]bool{
@@ -169,6 +191,7 @@ type TimerCollection struct {
 	onBreak         bool
 	preBreakActive  int
 	preBreakRunning bool
+	breakAccrued    time.Duration
 }
 
 func NewCollection(defaultDurationSecs uint64) *TimerCollection {
@@ -219,6 +242,7 @@ func (c *TimerCollection) RemoveTimer(index int) error {
 			c.EndBreak()
 		}
 		c.breakIndex = -1
+		c.breakAccrued = 0
 	} else if index < c.breakIndex {
 		c.breakIndex--
 	}
@@ -237,9 +261,15 @@ func (c *TimerCollection) BreakIndex() int { return c.breakIndex }
 // IsOnBreak reports whether the collection is currently in break mode.
 func (c *TimerCollection) IsOnBreak() bool { return c.onBreak }
 
+// SetMaxToCurrent commits the active timer's current time as its maximum.
+func (c *TimerCollection) SetMaxToCurrent() {
+	c.timers[c.activeIndex].Timer.SetMaxToRemaining()
+}
+
 // ToggleBreakDesignation designates the currently-active timer as the break
 // timer, or clears the designation if it is already the break timer.
 func (c *TimerCollection) ToggleBreakDesignation() {
+	c.breakAccrued = 0
 	if c.breakIndex == c.activeIndex {
 		c.breakIndex = -1
 		if c.onBreak {
@@ -300,20 +330,46 @@ func (c *TimerCollection) ToggleBreak() error {
 	return c.StartBreak()
 }
 
-// AddBreakTime adds time to the designated break timer, if any.
+// AddBreakTime grows the accrued break allocation for the designated break
+// timer, clamped to at most the break timer's remaining time (parity).
 func (c *TimerCollection) AddBreakTime(amount time.Duration) {
 	if c.breakIndex < 0 {
 		return
 	}
-	c.timers[c.breakIndex].Timer.AddTime(amount)
+	c.breakAccrued += amount
+	if c.breakAccrued < 0 {
+		c.breakAccrued = 0
+	}
+	if maxAllocation := c.timers[c.breakIndex].Timer.Remaining(); c.breakAccrued > maxAllocation {
+		c.breakAccrued = maxAllocation
+	}
 }
 
-// RemoveBreakTime removes time from the designated break timer, if any.
+// RemoveBreakTime shrinks the accrued break allocation, floored at zero.
 func (c *TimerCollection) RemoveBreakTime(amount time.Duration) {
 	if c.breakIndex < 0 {
 		return
 	}
-	c.timers[c.breakIndex].Timer.RemoveTime(amount)
+	c.breakAccrued -= amount
+	if c.breakAccrued < 0 {
+		c.breakAccrued = 0
+	}
+}
+
+// BreakAccrued returns the accrued break allocation for the designated break
+// timer, clamped to its remaining time. Zero if no break timer is designated.
+func (c *TimerCollection) BreakAccrued() time.Duration {
+	if c.breakIndex < 0 {
+		return 0
+	}
+	rem := c.timers[c.breakIndex].Timer.Remaining()
+	if c.breakAccrued > rem {
+		return rem
+	}
+	if c.breakAccrued < 0 {
+		return 0
+	}
+	return c.breakAccrued
 }
 
 func (c *TimerCollection) SwitchTo(index int) error {
@@ -358,6 +414,10 @@ func (c *TimerCollection) RenameTimer(index int, name string) error {
 func (c *TimerCollection) TimerList() []TimerInfo {
 	out := make([]TimerInfo, len(c.timers))
 	for i, t := range c.timers {
+		breakAccruedSecs := 0.0
+		if i == c.breakIndex {
+			breakAccruedSecs = c.BreakAccrued().Seconds()
+		}
 		out[i] = TimerInfo{
 			Index:                i,
 			Name:                 t.Name,
@@ -367,6 +427,7 @@ func (c *TimerCollection) TimerList() []TimerInfo {
 			Tint:                 t.Tint,
 			OriginalDurationSecs: t.Timer.originalDuration.Seconds(),
 			IsBreakTimer:         i == c.breakIndex,
+			BreakAccruedSecs:     breakAccruedSecs,
 		}
 	}
 	return out

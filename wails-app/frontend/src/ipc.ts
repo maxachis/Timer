@@ -70,6 +70,8 @@ export async function invoke<T = unknown>(cmd: string, args?: Args): Promise<T> 
       return (await App.SetTimerTint((a as any).index, (a as any).tint)) as T;
     case "toggle_break_timer":
       return (await App.ToggleBreakTimer()) as T;
+    case "set_max_time":
+      return (await App.SetMaxTime()) as T;
     case "toggle_break":
       return (await App.ToggleBreak()) as T;
     case "add_break_time":

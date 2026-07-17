@@ -58,6 +58,8 @@ export function SaveSettings(arg1:settings.AppSettings):Promise<void>;
 
 export function SetAlwaysOnTop(arg1:boolean):Promise<void>;
 
+export function SetMaxTime():Promise<void>;
+
 export function SetTimerTint(arg1:number,arg2:string):Promise<void>;
 
 export function SetWindowSize(arg1:number,arg2:number):Promise<void>;

@@ -67,6 +67,7 @@ export namespace timer {
 	    tint: string;
 	    original_duration_secs: number;
 	    is_break_timer: boolean;
+	    break_accrued_secs: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new TimerInfo(source);
@@ -82,6 +83,7 @@ export namespace timer {
 	        this.tint = source["tint"];
 	        this.original_duration_secs = source["original_duration_secs"];
 	        this.is_break_timer = source["is_break_timer"];
+	        this.break_accrued_secs = source["break_accrued_secs"];
 	    }
 	}
 

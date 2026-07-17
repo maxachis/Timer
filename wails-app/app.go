@@ -248,6 +248,17 @@ func (a *App) ToggleBreakTimer() {
 	}
 }
 
+// SetMaxTime commits the active timer's current time as its maximum, so that
+// resetting returns to it and the stacked bar scales against it.
+func (a *App) SetMaxTime() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.timers.SetMaxToCurrent()
+	if a.store != nil {
+		_ = a.store.SaveTimerStates(a.timers.Snapshot())
+	}
+}
+
 func (a *App) ToggleBreak() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()

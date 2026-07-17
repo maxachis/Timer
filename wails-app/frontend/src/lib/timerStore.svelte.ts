@@ -388,6 +388,12 @@ class TimerStore {
     await this.fetchTimerList();
   }
 
+  async setMaxTime() {
+    await invoke("set_max_time");
+    await this.fetchStatus();
+    await this.fetchTimerList();
+  }
+
   async addBreakTime() {
     await invoke("add_break_time");
     await this.fetchStatus();

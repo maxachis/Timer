@@ -985,6 +985,27 @@ main.finished .separator {
   transition: height 0.15s ease-out, opacity 0.2s ease;
 }
 
+.bar-break-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 8px;
+  opacity: 0.85;
+  pointer-events: none;
+  transition: height 0.15s ease-out;
+  background-color: var(--break-color);
+  /* Hatch pairs a light and a dark band so the texture stays legible whatever
+     luminance the inverted base color lands on. */
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.38) 0 4px,
+    transparent 4px 8px,
+    rgba(0, 0, 0, 0.28) 8px 12px,
+    transparent 12px 16px
+  );
+}
+
 .bar-tooltip {
   position: absolute;
   top: 50%;
@@ -1033,6 +1054,15 @@ main.finished .separator {
    invert only the break-source lane again so it stands out. */
 main.break {
   filter: invert(1) hue-rotate(180deg);
+  /* The page backdrop lives on <body>, outside this filter, and `main`'s tint is
+     a translucent wash — so inverting `main` alone flipped the text to near-white
+     while the cream page behind it stayed cream. Paint an opaque base here, with
+     the tint wash layered over it, so backdrop and text invert together. */
+  background-color: var(--warm-white);
+  background-image: linear-gradient(
+    var(--timer-tint, transparent),
+    var(--timer-tint, transparent)
+  );
 }
 
 main.break .stacked-bar {

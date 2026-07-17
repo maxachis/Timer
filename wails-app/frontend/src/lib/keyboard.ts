@@ -13,6 +13,10 @@ export function handleKeydown(event: KeyboardEvent) {
   if (timer.editingName) return;
   switch (event.key) {
     case " ":
+      // Alt+Space is the canonical "start a break" chord, but some window
+      // managers (e.g. GNOME/Ubuntu) reserve it for the window menu and grab
+      // it before the webview sees the keydown. Alt+B (below) is the portable
+      // equivalent; this binding still serves platforms that leave Alt+Space free.
       if (event.altKey) {
         event.preventDefault();
         timer.toggleBreak();
@@ -121,10 +125,21 @@ export function handleKeydown(event: KeyboardEvent) {
       event.preventDefault();
       timer.toggleMiniMode();
       break;
+    case "s":
+    case "S":
+      event.preventDefault();
+      timer.setMaxTime();
+      break;
     case "b":
     case "B":
       event.preventDefault();
-      timer.toggleBreakDesignation();
+      // Alt+B toggles the break (portable stand-in for the WM-grabbed
+      // Alt+Space); plain b/B designates the active timer as the break timer.
+      if (event.altKey) {
+        timer.toggleBreak();
+      } else {
+        timer.toggleBreakDesignation();
+      }
       break;
   }
 }

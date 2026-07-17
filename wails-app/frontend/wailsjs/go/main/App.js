@@ -110,6 +110,10 @@ export function SetAlwaysOnTop(arg1) {
   return window['go']['main']['App']['SetAlwaysOnTop'](arg1);
 }
 
+export function SetMaxTime() {
+  return window['go']['main']['App']['SetMaxTime']();
+}
+
 export function SetTimerTint(arg1, arg2) {
   return window['go']['main']['App']['SetTimerTint'](arg1, arg2);
 }
