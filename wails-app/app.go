@@ -301,6 +301,12 @@ func (a *App) RemoveBreakTimeTertiary() {
 	a.timers.RemoveBreakTime(time.Duration(a.settings.TertiaryIncrementSecs) * time.Second)
 }
 
+func (a *App) ResetBreakTime() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.timers.ResetBreakTime()
+}
+
 func (a *App) GetSettings() settings.AppSettings {
 	a.mu.Lock()
 	defer a.mu.Unlock()

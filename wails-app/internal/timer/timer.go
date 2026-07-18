@@ -356,6 +356,14 @@ func (c *TimerCollection) RemoveBreakTime(amount time.Duration) {
 	}
 }
 
+// ResetBreakTime clears the accrued break allocation back to zero.
+func (c *TimerCollection) ResetBreakTime() {
+	if c.breakIndex < 0 {
+		return
+	}
+	c.breakAccrued = 0
+}
+
 // BreakAccrued returns the accrued break allocation for the designated break
 // timer, clamped to its remaining time. Zero if no break timer is designated.
 func (c *TimerCollection) BreakAccrued() time.Duration {

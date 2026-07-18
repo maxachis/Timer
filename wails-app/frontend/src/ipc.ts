@@ -86,6 +86,8 @@ export async function invoke<T = unknown>(cmd: string, args?: Args): Promise<T> 
       return (await App.AddBreakTimeTertiary()) as T;
     case "remove_break_time_tertiary":
       return (await App.RemoveBreakTimeTertiary()) as T;
+    case "reset_break_time":
+      return (await App.ResetBreakTime()) as T;
     case "get_settings":
       return (await App.GetSettings()) as T;
     case "save_settings":

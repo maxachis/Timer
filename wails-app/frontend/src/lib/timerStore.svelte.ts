@@ -441,6 +441,12 @@ class TimerStore {
     await this.fetchTimerList();
   }
 
+  async resetBreakTime() {
+    await invoke("reset_break_time");
+    await this.fetchStatus();
+    await this.fetchTimerList();
+  }
+
   handleMinimize() {
     getCurrentWindow().minimize();
   }

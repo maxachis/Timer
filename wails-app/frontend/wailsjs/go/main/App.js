@@ -94,6 +94,10 @@ export function RenameTimer(arg1, arg2) {
   return window['go']['main']['App']['RenameTimer'](arg1, arg2);
 }
 
+export function ResetBreakTime() {
+  return window['go']['main']['App']['ResetBreakTime']();
+}
+
 export function ResetTimer() {
   return window['go']['main']['App']['ResetTimer']();
 }

@@ -676,6 +676,19 @@ func TestRemoveBreakTimeFloorsAtZero(t *testing.T) {
 	}
 }
 
+func TestResetBreakTimeZeroesAccrual(t *testing.T) {
+	c := NewCollection(300)
+	c.AddTimer("Break", 120)
+	c.SwitchTo(1)
+	c.ToggleBreakDesignation()
+
+	c.AddBreakTime(45 * time.Second)
+	c.ResetBreakTime()
+	if got := c.BreakAccrued(); got != 0 {
+		t.Fatalf("expected accrued reset to 0, got %v", got)
+	}
+}
+
 func TestAddBreakTimeNoBreakTimerIsNoop(t *testing.T) {
 	c := NewCollection(300)
 	c.AddBreakTime(10 * time.Second)

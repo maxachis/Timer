@@ -36,6 +36,11 @@ export function handleKeydown(event: KeyboardEvent) {
       else if (timer.timerState === "finished") timer.handleReset();
       break;
     case "ArrowDown":
+      if (event.altKey) {
+        event.preventDefault();
+        timer.resetBreakTime();
+        break;
+      }
       if (timer.timerState !== "idle") {
         event.preventDefault();
         timer.handleReset();

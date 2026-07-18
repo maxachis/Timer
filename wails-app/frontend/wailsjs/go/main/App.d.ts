@@ -50,6 +50,8 @@ export function RemoveTimeTertiary():Promise<void>;
 
 export function RenameTimer(arg1:number,arg2:string):Promise<void>;
 
+export function ResetBreakTime():Promise<void>;
+
 export function ResetTimer():Promise<void>;
 
 export function ResumeTimer():Promise<void>;

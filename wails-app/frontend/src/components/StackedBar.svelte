@@ -79,6 +79,9 @@
             style={`height:${breakPct}%;--break-color:${inverseHex(color)}`}
           ></div>
         {/if}
+        {#if entry.name}
+          <span class="bar-label">{entry.name}</span>
+        {/if}
         <div class="bar-tooltip">
           {entry.name || `Timer ${entry.index + 1}`} · {clock(entry.remaining_secs)} / {clock(entry.original_duration_secs)}{#if entry.is_break_timer} · break {clock(entry.break_accrued_secs)}{/if}
         </div>
