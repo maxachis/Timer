@@ -360,6 +360,12 @@ class TimerStore {
     await this.fetchTimerList();
   }
 
+  async handleSwitchToPosition(position: number) {
+    const entry = this.timerList[position - 1];
+    if (!entry) return;
+    await this.handleSwitchTimer(entry.index);
+  }
+
   startEditName() {
     this.editNameValue = this.activeName;
     this.editingName = true;

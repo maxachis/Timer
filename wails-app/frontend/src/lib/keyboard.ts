@@ -11,6 +11,13 @@ export function handleNameKeydown(event: KeyboardEvent) {
 export function handleKeydown(event: KeyboardEvent) {
   if (timer.showSettings) return;
   if (timer.editingName) return;
+  // Alt+<n> jumps to the nth block from the top of the stacked bar. Guarded
+  // before the switch so it never collides with the Alt+Arrow break chords.
+  if (event.altKey && /^[1-9]$/.test(event.key)) {
+    event.preventDefault();
+    timer.handleSwitchToPosition(Number(event.key));
+    return;
+  }
   switch (event.key) {
     case " ":
       // Alt+Space is the canonical "start a break" chord, but some window

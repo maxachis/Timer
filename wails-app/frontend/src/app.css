@@ -954,8 +954,12 @@ main.finished .separator {
   flex-direction: column;
   gap: 4px;
   width: clamp(70px, 18vmin, 120px);
-  height: clamp(80px, 75vmin, 300px);
-  max-height: calc(100vh - 5rem);
+  /* Fill the vertical slack in the default view: track viewport height rather
+     than the width-driven vmin (which capped short on tall windows). The 8rem
+     reserve keeps clear of the top-corner buttons and leaves room for the
+     totals header stacked above this bar. */
+  height: clamp(80px, 88vh, calc(100vh - 8rem));
+  max-height: calc(100vh - 8rem);
   z-index: 1;
 }
 
@@ -1044,9 +1048,49 @@ main.finished .separator {
   pointer-events: none;
 }
 
+.bar-index-badge {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  font-size: 0.5rem;
+  font-weight: 600;
+  color: var(--charcoal);
+  opacity: 0.6;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.stacked-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  z-index: 1;
+}
+
+.stacked-bar-totals {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.1;
+  color: var(--charcoal);
+}
+
+.totals-remaining {
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.totals-set {
+  font-size: 0.6rem;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Compact tier and below: collapse the stacked bar entirely */
 @media (max-width: 349px), (max-height: 399px) {
-  .stacked-bar { display: none; }
+  .stacked-bar-wrap { display: none; }
 }
 
 /* Break mode: invert the whole interface via CSS filter (v1 approach),
