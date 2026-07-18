@@ -22,6 +22,11 @@ class TimerStore {
   timerState = $state("idle");
   isFinished = $state(false);
   pollInterval: ReturnType<typeof setInterval> | null = $state(null);
+  // Auto-resume after switching: when you leave a running timer, the timer you
+  // settle on resumes once this debounce elapses. The window lets quick rotation
+  // across several timers pass through without each intermediate one running.
+  switchResumeDelayMs = 1500;
+  pendingResumeTimeout: ReturnType<typeof setTimeout> | null = $state(null);
   totalDuration = $state(300);
   prevState = $state("idle");
   alwaysOnTop = $state(false);
@@ -228,6 +233,7 @@ class TimerStore {
   }
 
   async handleStart() {
+    this.cancelPendingResume();
     playStartBlip();
     await invoke("start_timer");
     await this.fetchStatus();
@@ -236,6 +242,7 @@ class TimerStore {
   }
 
   async handlePause() {
+    this.cancelPendingResume();
     playStopBlip();
     await invoke("pause_timer");
     await this.fetchStatus();
@@ -243,6 +250,7 @@ class TimerStore {
   }
 
   async handleResume() {
+    this.cancelPendingResume();
     playStartBlip();
     await invoke("resume_timer");
     await this.fetchStatus();
@@ -251,6 +259,7 @@ class TimerStore {
   }
 
   async handleReset() {
+    this.cancelPendingResume();
     playStopBlip();
     await invoke("reset_timer");
     getCurrentWindow().requestUserAttention(null);
@@ -325,39 +334,56 @@ class TimerStore {
     await this.fetchTimerList();
   }
 
-  async handleSwitchTimer(index: number) {
-    if (this.timerState === "running") playStopBlip();
+  private stopPolling() {
     if (this.pollInterval) {
       clearInterval(this.pollInterval);
       this.pollInterval = null;
     }
-    await invoke("switch_timer", { index });
+  }
+
+  cancelPendingResume() {
+    if (this.pendingResumeTimeout) {
+      clearTimeout(this.pendingResumeTimeout);
+      this.pendingResumeTimeout = null;
+    }
+  }
+
+  // After landing on a timer, resume it once the user settles (debounced), but
+  // only if we left a running timer or an auto-resume was already pending from an
+  // in-progress rotation. A paused timer resumes; an idle one starts fresh.
+  private scheduleSwitchResume(shouldResume: boolean) {
+    this.cancelPendingResume();
+    if (!shouldResume) return;
+    this.pendingResumeTimeout = setTimeout(() => {
+      this.pendingResumeTimeout = null;
+      if (this.timerState === "paused") this.handleResume();
+      else if (this.timerState === "idle") this.handleStart();
+    }, this.switchResumeDelayMs);
+  }
+
+  private async performSwitch(doSwitch: () => Promise<unknown>) {
+    const shouldResume =
+      this.timerState === "running" || this.pendingResumeTimeout !== null;
+    if (this.timerState === "running") playStopBlip();
+    this.stopPolling();
+    await doSwitch();
     await this.fetchStatus();
     await this.fetchTimerList();
+    this.scheduleSwitchResume(shouldResume);
+  }
+
+  async handleSwitchTimer(index: number) {
+    await this.performSwitch(() => invoke("switch_timer", { index }));
   }
 
   async handleSwitchNext() {
     if (this.timerCount <= 1) return;
-    if (this.timerState === "running") playStopBlip();
-    if (this.pollInterval) {
-      clearInterval(this.pollInterval);
-      this.pollInterval = null;
-    }
-    await invoke("switch_timer_next");
-    await this.fetchStatus();
-    await this.fetchTimerList();
+    await this.performSwitch(() => invoke("switch_timer_next"));
   }
 
   async handleSwitchPrev() {
     if (this.timerCount <= 1) return;
-    if (this.timerState === "running") playStopBlip();
-    if (this.pollInterval) {
-      clearInterval(this.pollInterval);
-      this.pollInterval = null;
-    }
-    await invoke("switch_timer_prev");
-    await this.fetchStatus();
-    await this.fetchTimerList();
+    await this.performSwitch(() => invoke("switch_timer_prev"));
   }
 
   async handleSwitchToPosition(position: number) {
