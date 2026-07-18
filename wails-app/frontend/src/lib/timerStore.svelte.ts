@@ -305,7 +305,7 @@ class TimerStore {
       await this.fetchStatus();
       await this.fetchTimerList();
     } catch (e) {
-      this.showToast("5 timer limit — remove one first");
+      this.showToast("Timer limit reached — remove one first");
     }
   }
 
