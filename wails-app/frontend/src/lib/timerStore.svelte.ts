@@ -392,6 +392,11 @@ class TimerStore {
     await invoke("toggle_break");
     await this.fetchStatus();
     await this.fetchTimerList();
+    // Entering a break activates and runs the break timer; ending one may
+    // resume a running work timer. Either way the display only ticks while a
+    // poll loop is alive, and toggling from a paused/idle timer leaves none —
+    // so (re)start polling whenever the resulting timer is running.
+    if (this.timerState === "running") this.startPolling();
   }
 
   async setMaxTime() {
