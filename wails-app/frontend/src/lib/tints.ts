@@ -40,19 +40,14 @@ export function tintSwatch(id: string): string {
   return TINTS.find((t) => t.id === id)?.swatch ?? "transparent";
 }
 
-export const BAR_PALETTE = [
-  "#d98a9c",
-  "#9cb890",
-  "#8db4dc",
-  "#b6a0dc",
-  "#e0a866",
-  "#8fbfb4",
-  "#d69a7c",
-];
+// NEUTRAL_BAR_COLOR is the stacked-bar lane color for a timer with no tint
+// (unset or explicitly "none"), so an untinted timer never shows a phantom
+// color borrowed from its position in the list.
+export const NEUTRAL_BAR_COLOR = "#b8b0a4";
 
-export function barColor(entry: TimerListEntry, index: number): string {
+export function barColor(entry: TimerListEntry): string {
   if (entry.tint && entry.tint !== "none") {
     return tintSwatch(entry.tint);
   }
-  return BAR_PALETTE[index % BAR_PALETTE.length];
+  return NEUTRAL_BAR_COLOR;
 }

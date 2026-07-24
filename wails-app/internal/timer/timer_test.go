@@ -489,25 +489,39 @@ func TestSetTintRoundTrip(t *testing.T) {
 	}
 }
 
-func TestTintDroppedOnRemove(t *testing.T) {
+func TestRemoveTimerLeavesRemainingTintsUnchanged(t *testing.T) {
 	c := NewCollection(300)
 	c.AddTimer("B", 300)
 	c.SetTint(0, "rose")
+	remainingTintBefore := c.TimerList()[1].Tint
 	if err := c.RemoveTimer(0); err != nil {
 		t.Fatal(err)
 	}
-	if c.TimerList()[0].Tint != "" {
-		t.Fatalf("expected empty tint on remaining timer, got %q", c.TimerList()[0].Tint)
+	if c.TimerList()[0].Tint != remainingTintBefore {
+		t.Fatalf("expected remaining timer's tint unchanged at %q, got %q", remainingTintBefore, c.TimerList()[0].Tint)
 	}
 }
 
-func TestSetTintNoneStoresEmpty(t *testing.T) {
+func TestRemoveThenAddPicksUnusedTint(t *testing.T) {
+	c := NewCollection(300) // tint: rose
+	c.AddTimer("B", 300)    // tint: sage
+	c.RemoveTimer(1)        // back to just rose
+	idx, err := c.AddTimer("C", 300)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.TimerList()[idx].Tint == "" || c.TimerList()[idx].Tint == c.TimerList()[0].Tint {
+		t.Fatalf("expected new timer to get a tint distinct from existing ones, got %q vs %q", c.TimerList()[idx].Tint, c.TimerList()[0].Tint)
+	}
+}
+
+func TestSetTintNoneStoresNone(t *testing.T) {
 	c := NewCollection(300)
 	if err := c.SetTint(0, "none"); err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
-	if c.TimerList()[0].Tint != "" {
-		t.Fatalf("expected empty tint for 'none', got %q", c.TimerList()[0].Tint)
+	if c.TimerList()[0].Tint != "none" {
+		t.Fatalf("expected tint 'none' to be stored as-is, got %q", c.TimerList()[0].Tint)
 	}
 }
 
@@ -882,5 +896,82 @@ func TestSetTintInvalid(t *testing.T) {
 	}
 	if err := c.SetTint(5, "rose"); err == nil {
 		t.Fatal("expected error for out-of-range index")
+	}
+}
+
+func TestNewCollectionInitialTimerGetsRose(t *testing.T) {
+	c := NewCollection(300)
+	if got := c.TimerList()[0].Tint; got != "rose" {
+		t.Fatalf("expected initial timer tint 'rose', got %q", got)
+	}
+}
+
+func TestAddTimerAssignsDistinctTints(t *testing.T) {
+	c := NewCollection(300)
+	for i := 2; i <= MaxTimers; i++ {
+		if _, err := c.AddTimer(fmt.Sprintf("Timer %d", i), 300); err != nil {
+			t.Fatalf("unexpected error adding timer %d: %v", i, err)
+		}
+	}
+	seen := make(map[string]bool)
+	for _, entry := range c.TimerList() {
+		if entry.Tint == "" {
+			t.Fatalf("expected non-empty tint, got empty at index %d", entry.Index)
+		}
+		if seen[entry.Tint] {
+			t.Fatalf("expected distinct tints, duplicate %q at index %d", entry.Tint, entry.Index)
+		}
+		seen[entry.Tint] = true
+	}
+}
+
+func TestFromNamesAssignsDistinctTints(t *testing.T) {
+	c := FromNames([]string{"A", "B", "C"}, 300)
+	seen := make(map[string]bool)
+	for _, entry := range c.TimerList() {
+		if entry.Tint == "" {
+			t.Fatalf("expected non-empty tint, got empty at index %d", entry.Index)
+		}
+		if seen[entry.Tint] {
+			t.Fatalf("expected distinct tints, duplicate %q at index %d", entry.Tint, entry.Index)
+		}
+		seen[entry.Tint] = true
+	}
+}
+
+func TestRestoreCollectionPreservesExplicitTints(t *testing.T) {
+	snap := CollectionSnapshot{
+		Timers: []TimerSnapshot{
+			{Name: "A", OriginalDurationMs: 300_000, DurationMs: 300_000, State: "idle", Tint: "sky"},
+			{Name: "B", OriginalDurationMs: 300_000, DurationMs: 300_000, State: "idle", Tint: "none"},
+		},
+	}
+	r := RestoreCollection(snap, 300)
+	list := r.TimerList()
+	if list[0].Tint != "sky" {
+		t.Fatalf("expected preserved tint 'sky', got %q", list[0].Tint)
+	}
+	if list[1].Tint != "none" {
+		t.Fatalf("expected preserved tint 'none', got %q", list[1].Tint)
+	}
+}
+
+func TestRestoreCollectionAutoAssignsUnsetTints(t *testing.T) {
+	snap := CollectionSnapshot{
+		Timers: []TimerSnapshot{
+			{Name: "A", OriginalDurationMs: 300_000, DurationMs: 300_000, State: "idle", Tint: ""},
+			{Name: "B", OriginalDurationMs: 300_000, DurationMs: 300_000, State: "idle", Tint: "bogus-legacy-id"},
+		},
+	}
+	r := RestoreCollection(snap, 300)
+	list := r.TimerList()
+	if list[0].Tint == "" {
+		t.Fatal("expected legacy unset tint to be auto-assigned")
+	}
+	if list[1].Tint == "" || list[1].Tint == "bogus-legacy-id" {
+		t.Fatalf("expected invalid tint id to be treated as unset and auto-assigned, got %q", list[1].Tint)
+	}
+	if list[0].Tint == list[1].Tint {
+		t.Fatalf("expected distinct auto-assigned tints, both got %q", list[0].Tint)
 	}
 }

@@ -168,17 +168,61 @@ var validTints = map[string]bool{
 	"sky": true, "lavender": true, "amber": true, "teal": true, "clay": true,
 }
 
-// SetTint sets the background tint id for the timer at index. "none" is
-// normalised to an empty string. Unknown ids or out-of-range indexes error.
+// canonicalTintOrder is the fixed assignment order for auto-picked tints,
+// matching the frontend's TINTS list (minus "none").
+var canonicalTintOrder = []string{"rose", "sage", "sky", "lavender", "amber", "teal", "clay"}
+
+// tintIsUnset reports whether a stored tint value means "never explicitly
+// set": the empty string, or an id that isn't "none" and isn't one of the
+// known palette ids (e.g. a corrupted or pre-palette legacy value).
+func tintIsUnset(tint string) bool {
+	if tint == "" {
+		return true
+	}
+	if tint == "none" {
+		return false
+	}
+	for _, id := range canonicalTintOrder {
+		if tint == id {
+			return false
+		}
+	}
+	return true
+}
+
+// nextTint picks a tint id for a new timer given the existing ones: the
+// first canonical-order id not already in use, or, if all are in use, the
+// least-used one (ties broken by canonical order).
+func nextTint(existing []*NamedTimer) string {
+	counts := make(map[string]int, len(canonicalTintOrder))
+	for _, id := range canonicalTintOrder {
+		counts[id] = 0
+	}
+	for _, nt := range existing {
+		if _, ok := counts[nt.Tint]; ok {
+			counts[nt.Tint]++
+		}
+	}
+	best := canonicalTintOrder[0]
+	bestCount := counts[best]
+	for _, id := range canonicalTintOrder[1:] {
+		if counts[id] < bestCount {
+			best = id
+			bestCount = counts[id]
+		}
+	}
+	return best
+}
+
+// SetTint sets the background tint id for the timer at index. "none" (an
+// explicit user choice of no color) is stored as-is, distinct from the
+// empty string (never set). Unknown ids or out-of-range indexes error.
 func (c *TimerCollection) SetTint(index int, tint string) error {
 	if index < 0 || index >= len(c.timers) {
 		return errors.New("Invalid timer index")
 	}
 	if !validTints[tint] {
 		return errors.New("Invalid tint")
-	}
-	if tint == "none" {
-		tint = ""
 	}
 	c.timers[index].Tint = tint
 	return nil
@@ -199,8 +243,10 @@ type TimerCollection struct {
 }
 
 func NewCollection(defaultDurationSecs uint64) *TimerCollection {
+	initial := &NamedTimer{Name: "", Timer: NewCountdownTimer(defaultDurationSecs)}
+	initial.Tint = nextTint(nil)
 	return &TimerCollection{
-		timers:      []*NamedTimer{{Name: "", Timer: NewCountdownTimer(defaultDurationSecs)}},
+		timers:      []*NamedTimer{initial},
 		activeIndex: 0,
 		breakIndex:  -1,
 	}
@@ -216,7 +262,9 @@ func FromNames(names []string, defaultDurationSecs uint64) *TimerCollection {
 	}
 	ts := make([]*NamedTimer, 0, n)
 	for i := 0; i < n; i++ {
-		ts = append(ts, &NamedTimer{Name: names[i], Timer: NewCountdownTimer(defaultDurationSecs)})
+		nt := &NamedTimer{Name: names[i], Timer: NewCountdownTimer(defaultDurationSecs)}
+		nt.Tint = nextTint(ts)
+		ts = append(ts, nt)
 	}
 	return &TimerCollection{timers: ts, activeIndex: 0, breakIndex: -1}
 }
@@ -230,7 +278,9 @@ func (c *TimerCollection) AddTimer(name string, durationSecs uint64) (int, error
 	if len(c.timers) >= MaxTimers {
 		return 0, fmt.Errorf("Maximum of %d timers reached. Remove a timer before adding another.", MaxTimers)
 	}
-	c.timers = append(c.timers, &NamedTimer{Name: name, Timer: NewCountdownTimer(durationSecs)})
+	nt := &NamedTimer{Name: name, Timer: NewCountdownTimer(durationSecs)}
+	nt.Tint = nextTint(c.timers)
+	c.timers = append(c.timers, nt)
 	return len(c.timers) - 1, nil
 }
 
@@ -580,11 +630,15 @@ func RestoreCollection(snap CollectionSnapshot, defaultDurationSecs uint64) *Tim
 	}
 	ts := make([]*NamedTimer, 0, n)
 	for i := 0; i < n; i++ {
-		ts = append(ts, &NamedTimer{
+		nt := &NamedTimer{
 			Name:  snap.Timers[i].Name,
 			Timer: restoreTimer(snap.Timers[i], defaultDurationSecs),
 			Tint:  snap.Timers[i].Tint,
-		})
+		}
+		if tintIsUnset(nt.Tint) {
+			nt.Tint = nextTint(ts)
+		}
+		ts = append(ts, nt)
 	}
 	active := snap.ActiveIndex
 	if active < 0 || active >= len(ts) {

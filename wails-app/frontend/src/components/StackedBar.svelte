@@ -53,7 +53,7 @@
       {@const fillPct = entry.original_duration_secs > 0
         ? Math.min(1, entry.remaining_secs / entry.original_duration_secs) * 100
         : 0}
-      {@const color = barColor(entry, index)}
+      {@const color = barColor(entry)}
       <button
         class="bar-lane"
         class:active={entry.is_active}
