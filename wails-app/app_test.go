@@ -101,18 +101,24 @@ func TestRenameTimerPersistsFullState(t *testing.T) {
 func TestAutosaveWritesElapsedProgress(t *testing.T) {
 	app, path := newTestApp(t)
 	app.StartTimer()
-	time.Sleep(30 * time.Millisecond)
 
 	cancel := app.startAutosave(10 * time.Millisecond)
 	defer cancel()
-	time.Sleep(40 * time.Millisecond) // wait for at least one tick
-	cancel()
 
-	snap, ok := loadSnap(t, path)
-	if !ok {
-		t.Fatal("autosave did not write timer_states")
+	// Poll rather than sleep a fixed amount: under load the ticker goroutine
+	// may lag arbitrarily. The store writes non-atomically, so a read racing
+	// the autosave can see a partial file — treat that as "not written yet".
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		store, err := settings.OpenStoreAt(path)
+		if err == nil {
+			var snap timer.CollectionSnapshot
+			if ok, err := store.LoadTimerStates(&snap); err == nil && ok &&
+				len(snap.Timers) > 0 && snap.Timers[0].ElapsedMs > 0 {
+				return
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
-	if snap.Timers[0].ElapsedMs == 0 {
-		t.Fatal("expected elapsed > 0 after autosave of running timer")
-	}
+	t.Fatal("autosave never wrote a snapshot with elapsed progress")
 }
