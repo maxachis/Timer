@@ -539,12 +539,28 @@ func TestStartBreakWithNoBreakTimerErrors(t *testing.T) {
 	}
 }
 
-func TestStartBreakPausesPreviousAndActivatesBreakTimer(t *testing.T) {
+// backdateStart shifts a timer's running start point into the past, so tests
+// can simulate elapsed run time without sleeping.
+func backdateStart(tm *CountdownTimer, d time.Duration) {
+	tm.startedAt = tm.startedAt.Add(-d)
+}
+
+// withDesignatedBreak builds a two-timer collection with timer 1 designated as
+// the break timer holding the given accrued allocation, and timer 0 active.
+func withDesignatedBreak(accrued time.Duration) *TimerCollection {
 	c := NewCollection(300)
 	c.AddTimer("Break", 120)
 	c.SwitchTo(1)
 	c.ToggleBreakDesignation()
 	c.SwitchTo(0)
+	if accrued > 0 {
+		c.AddBreakTime(accrued)
+	}
+	return c
+}
+
+func TestStartBreakPausesPreviousAndActivatesBreakTimer(t *testing.T) {
+	c := withDesignatedBreak(30 * time.Second)
 	c.Active().Start()
 
 	if err := c.StartBreak(); err != nil {
@@ -565,11 +581,7 @@ func TestStartBreakPausesPreviousAndActivatesBreakTimer(t *testing.T) {
 }
 
 func TestEndBreakRestoresPreviousActiveAndResumesIfRunning(t *testing.T) {
-	c := NewCollection(300)
-	c.AddTimer("Break", 120)
-	c.SwitchTo(1)
-	c.ToggleBreakDesignation()
-	c.SwitchTo(0)
+	c := withDesignatedBreak(30 * time.Second)
 	c.Active().Start()
 
 	if err := c.StartBreak(); err != nil {
@@ -591,11 +603,7 @@ func TestEndBreakRestoresPreviousActiveAndResumesIfRunning(t *testing.T) {
 }
 
 func TestEndBreakDoesNotResumeIfNotPreviouslyRunning(t *testing.T) {
-	c := NewCollection(300)
-	c.AddTimer("Break", 120)
-	c.SwitchTo(1)
-	c.ToggleBreakDesignation()
-	c.SwitchTo(0)
+	c := withDesignatedBreak(30 * time.Second)
 	// Active timer 0 is idle (never started).
 
 	if err := c.StartBreak(); err != nil {
@@ -604,6 +612,97 @@ func TestEndBreakDoesNotResumeIfNotPreviouslyRunning(t *testing.T) {
 	c.EndBreak()
 	if c.TimerAt(0).StateName() != "idle" {
 		t.Fatalf("expected timer 0 still idle, got %q", c.TimerAt(0).StateName())
+	}
+}
+
+func TestStartBreakWithZeroAccruedTimeErrors(t *testing.T) {
+	c := withDesignatedBreak(0)
+	c.Active().Start()
+
+	if err := c.StartBreak(); err == nil {
+		t.Fatal("expected error starting a break with no accrued break time")
+	}
+	if c.IsOnBreak() {
+		t.Fatal("expected collection not on break")
+	}
+	if c.ActiveIndex() != 0 {
+		t.Fatalf("expected active index unchanged at 0, got %d", c.ActiveIndex())
+	}
+	if c.Active().StateName() != "running" {
+		t.Fatalf("expected work timer left running, got %q", c.Active().StateName())
+	}
+}
+
+// expectAccruedNear asserts the accrued allocation is within polling slack of
+// want (elapsed time is measured against the wall clock, so allow a little
+// drift below the exact value).
+func expectAccruedNear(t *testing.T, c *TimerCollection, want time.Duration) {
+	t.Helper()
+	got := c.BreakAccrued()
+	if got > want || got < want-100*time.Millisecond {
+		t.Fatalf("expected accrued ~%v, got %v", want, got)
+	}
+}
+
+func TestBreakAccruedDrainsWhileOnBreak(t *testing.T) {
+	c := withDesignatedBreak(10 * time.Second)
+	if err := c.StartBreak(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Simulate 4s of break usage.
+	backdateStart(c.TimerAt(1), 4*time.Second)
+	expectAccruedNear(t, c, 6*time.Second)
+}
+
+func TestEndBreakCommitsConsumedBreakTime(t *testing.T) {
+	c := withDesignatedBreak(10 * time.Second)
+	c.Active().Start()
+	if err := c.StartBreak(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	backdateStart(c.TimerAt(1), 4*time.Second)
+	c.EndBreak()
+
+	// The 4s spent on break stays subtracted after the break ends...
+	expectAccruedNear(t, c, 6*time.Second)
+	// ...and a second break draws down from the committed value.
+	if err := c.StartBreak(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	backdateStart(c.TimerAt(1), 4*time.Second)
+	c.EndBreak()
+	expectAccruedNear(t, c, 2*time.Second)
+}
+
+func TestBreakAccruedFloorsAtZeroWhenOverconsumed(t *testing.T) {
+	c := withDesignatedBreak(5 * time.Second)
+	if err := c.StartBreak(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	backdateStart(c.TimerAt(1), 8*time.Second)
+
+	if got := c.BreakAccrued(); got != 0 {
+		t.Fatalf("expected accrued floored at 0, got %v", got)
+	}
+	c.EndBreak()
+	if got := c.BreakAccrued(); got != 0 {
+		t.Fatalf("expected accrued still 0 after break ends, got %v", got)
+	}
+}
+
+func TestBreakUsageDrainsBreakBlockItself(t *testing.T) {
+	c := withDesignatedBreak(10 * time.Second)
+	blockBefore := c.TimerAt(1).Remaining()
+	if err := c.StartBreak(); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	backdateStart(c.TimerAt(1), 4*time.Second)
+	c.EndBreak()
+
+	drained := blockBefore - c.TimerAt(1).Remaining()
+	if drained < 3900*time.Millisecond || drained > 4100*time.Millisecond {
+		t.Fatalf("expected ~4s drained from break block, got %v", drained)
 	}
 }
 

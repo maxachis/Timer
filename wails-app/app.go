@@ -104,8 +104,14 @@ func (a *App) GetTimerStatus() TimerStatus {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	t := a.timers.Active()
+	remaining := t.Remaining()
+	// While on break the countdown is the break allocation left within the
+	// block, not the block's own remaining time.
+	if a.timers.IsOnBreak() {
+		remaining = a.timers.BreakAccrued()
+	}
 	return TimerStatus{
-		RemainingSecs: t.Remaining().Seconds(),
+		RemainingSecs: remaining.Seconds(),
 		State:         t.StateName(),
 		IsFinished:    t.IsFinished(),
 		ActiveIndex:   a.timers.ActiveIndex(),

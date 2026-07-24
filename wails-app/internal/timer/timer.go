@@ -192,6 +192,10 @@ type TimerCollection struct {
 	preBreakActive  int
 	preBreakRunning bool
 	breakAccrued    time.Duration
+	// breakStartRemaining is the break timer's remaining time when the current
+	// break began; the difference against its live remaining is how much of the
+	// accrued allocation this break has consumed so far.
+	breakStartRemaining time.Duration
 }
 
 func NewCollection(defaultDurationSecs uint64) *TimerCollection {
@@ -281,14 +285,18 @@ func (c *TimerCollection) ToggleBreakDesignation() {
 }
 
 // StartBreak pauses the active timer, remembers it, and switches to and
-// starts/resumes the designated break timer. Errors if no break timer is
-// designated. A no-op if already on break.
+// starts/resumes the designated break timer. The break draws down the accrued
+// break allocation, so it errors if no break timer is designated or the
+// allocation is empty. A no-op if already on break.
 func (c *TimerCollection) StartBreak() error {
 	if c.breakIndex < 0 {
 		return errors.New("No break timer designated")
 	}
 	if c.onBreak {
 		return nil
+	}
+	if c.BreakAccrued() <= 0 {
+		return errors.New("No break time accrued")
 	}
 	c.preBreakActive = c.activeIndex
 	c.preBreakRunning = c.timers[c.activeIndex].Timer.kind == stateRunning
@@ -302,14 +310,34 @@ func (c *TimerCollection) StartBreak() error {
 	case statePaused:
 		bt.Resume()
 	}
+	c.breakStartRemaining = bt.Remaining()
 	return nil
 }
 
-// EndBreak pauses the break timer and restores the previously-active timer,
-// resuming it if it had been running. A no-op if not on break.
+// breakConsumed reports how much break time the in-progress break has used:
+// the break timer runs while on break, so its drop in remaining time since the
+// break began is exactly the allocation consumed. Zero when not on break.
+func (c *TimerCollection) breakConsumed() time.Duration {
+	if !c.onBreak {
+		return 0
+	}
+	consumed := c.breakStartRemaining - c.timers[c.breakIndex].Timer.Remaining()
+	if consumed < 0 {
+		return 0
+	}
+	return consumed
+}
+
+// EndBreak commits the break time consumed, pauses the break timer, and
+// restores the previously-active timer, resuming it if it had been running.
+// A no-op if not on break.
 func (c *TimerCollection) EndBreak() {
 	if !c.onBreak {
 		return
+	}
+	c.breakAccrued -= c.breakConsumed()
+	if c.breakAccrued < 0 {
+		c.breakAccrued = 0
 	}
 	c.timers[c.breakIndex].Timer.Pause()
 	c.onBreak = false
@@ -340,7 +368,10 @@ func (c *TimerCollection) AddBreakTime(amount time.Duration) {
 	if c.breakAccrued < 0 {
 		c.breakAccrued = 0
 	}
-	if maxAllocation := c.timers[c.breakIndex].Timer.Remaining(); c.breakAccrued > maxAllocation {
+	// The un-consumed allocation can never exceed the break block's remaining
+	// time; mid-break, the stored value still carries the consumed portion.
+	maxAllocation := c.timers[c.breakIndex].Timer.Remaining() + c.breakConsumed()
+	if c.breakAccrued > maxAllocation {
 		c.breakAccrued = maxAllocation
 	}
 }
@@ -364,20 +395,22 @@ func (c *TimerCollection) ResetBreakTime() {
 	c.breakAccrued = 0
 }
 
-// BreakAccrued returns the accrued break allocation for the designated break
-// timer, clamped to its remaining time. Zero if no break timer is designated.
+// BreakAccrued returns the break allocation still available on the designated
+// break timer: the stored allocation minus whatever an in-progress break has
+// consumed, clamped to the break block's remaining time. Zero if no break
+// timer is designated.
 func (c *TimerCollection) BreakAccrued() time.Duration {
 	if c.breakIndex < 0 {
 		return 0
 	}
-	rem := c.timers[c.breakIndex].Timer.Remaining()
-	if c.breakAccrued > rem {
-		return rem
+	acc := c.breakAccrued - c.breakConsumed()
+	if rem := c.timers[c.breakIndex].Timer.Remaining(); acc > rem {
+		acc = rem
 	}
-	if c.breakAccrued < 0 {
+	if acc < 0 {
 		return 0
 	}
-	return c.breakAccrued
+	return acc
 }
 
 func (c *TimerCollection) SwitchTo(index int) error {

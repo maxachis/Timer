@@ -199,11 +199,16 @@ class TimerStore {
     }
     this.prevState = status.state;
 
-    // Auto-end break mode when the break timer hits 0. toggleBreak() ends the
-    // break server-side and re-fetches fresh status (restoring/resuming the work
-    // timer), so return here rather than let this stale snapshot's poll-clear
-    // logic below wrongly stop polling a just-resumed running work timer.
-    if (this.onBreak && status.is_finished) {
+    // Auto-end break mode when the break allocation runs out (remaining_secs
+    // reports the allocation while on break) or the break block itself
+    // finishes. toggleBreak() ends the break server-side and re-fetches fresh
+    // status (restoring/resuming the work timer), so return here rather than
+    // let this stale snapshot's poll-clear logic below wrongly stop polling a
+    // just-resumed running work timer.
+    if (this.onBreak && (status.remaining_secs <= 0 || status.is_finished)) {
+      // The finished transition above already alerted; an exhausted allocation
+      // still needs its own "break is over" cue.
+      if (status.state !== "finished") playAlertSound();
       await this.toggleBreak();
       return;
     }
@@ -415,7 +420,14 @@ class TimerStore {
   }
 
   async toggleBreak() {
-    await invoke("toggle_break");
+    try {
+      await invoke("toggle_break");
+    } catch (e) {
+      // The backend refuses a break with no designated timer or no accrued
+      // allocation; surface its message instead of silently doing nothing.
+      this.showToast(typeof e === "string" ? e : "Cannot start break");
+      return;
+    }
     await this.fetchStatus();
     await this.fetchTimerList();
     // Entering a break activates and runs the break timer; ending one may
