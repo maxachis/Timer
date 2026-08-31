@@ -21,7 +21,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Anybody:wght@300;400;500&display=swap" rel="stylesheet" />
 </svelte:head>
 
-<main style={`${timer.showSettings ? "--wails-draggable:no-drag" : "--wails-draggable:drag"};--timer-tint:${timer.activeTintWash}`} class:finished={timer.isFinished} class:running={timer.timerState === "running"} class:paused={timer.timerState === "paused"} class:break={timer.onBreak}>
+<main style={`${timer.showSettings ? "--wails-draggable:no-drag" : "--wails-draggable:drag"};--timer-tint:${timer.activeTintWash}`} class:finished={timer.isFinished} class:running={timer.timerState === "running"} class:paused={timer.timerState === "paused"} class:break={timer.onBreak} class:settings-view={timer.showSettings}>
   {#if timer.showSettings}
     <Settings />
   {:else}
