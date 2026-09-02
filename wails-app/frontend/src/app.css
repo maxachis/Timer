@@ -904,6 +904,22 @@ main.settings-view {
     padding-top: 32px;
   }
 
+  /* Let the state label sit just under the digits without moving them. The
+     face is a vertically centred column, so anything with real height pushes
+     the time up into the dots and timer name pinned at the top. Zero height
+     plus equal-and-opposite margins costs the layout nothing, while the text
+     still renders in place and follows the digits at any window size. */
+  .state-label,
+  .finished-label {
+    height: 0;
+    line-height: 0;
+    margin-top: 0.7rem;
+    margin-bottom: -0.7rem;
+    font-size: 0.55rem;
+    letter-spacing: 0.15em;
+    white-space: nowrap;
+  }
+
   /* Active timer name, centered just below the dots */
   .compact-timer-label {
     display: block;
@@ -948,6 +964,14 @@ main.settings-view {
 
   .timer-face.has-mini-label {
     padding-top: 20px;
+  }
+
+  .state-label,
+  .finished-label {
+    font-size: 0.5rem;
+    letter-spacing: 0.1em;
+    margin-top: 0.5rem;
+    margin-bottom: -0.5rem;
   }
 }
 
