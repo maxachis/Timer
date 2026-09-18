@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"wails-app/internal/history"
 	"wails-app/internal/settings"
 	"wails-app/internal/timer"
 )
@@ -17,12 +18,7 @@ func newTestApp(t *testing.T) (*App, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := settings.Default()
-	return &App{
-		timers:   timer.NewCollection(s.DefaultDurationSecs),
-		settings: s,
-		store:    store,
-	}, path
+	return newAppFromStore(store), path
 }
 
 func loadSnap(t *testing.T, path string) (timer.CollectionSnapshot, bool) {
@@ -121,4 +117,120 @@ func TestAutosaveWritesElapsedProgress(t *testing.T) {
 		time.Sleep(5 * time.Millisecond)
 	}
 	t.Fatal("autosave never wrote a snapshot with elapsed progress")
+}
+
+func historyKinds(app *App) []string {
+	entries := app.GetHistory()
+	out := make([]string, len(entries))
+	for i, e := range entries {
+		out[i] = e.Kind
+	}
+	return out
+}
+
+func assertHistoryKinds(t *testing.T, app *App, want ...string) {
+	t.Helper()
+	got := historyKinds(app)
+	if len(got) != len(want) {
+		t.Fatalf("history kinds = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("history kinds = %v, want %v", got, want)
+		}
+	}
+}
+
+func TestHistoryLogsStartPauseResumeReset(t *testing.T) {
+	app, _ := newTestApp(t)
+	app.StartTimer()
+	app.PauseTimer()
+	app.ResumeTimer()
+	app.ResetTimer()
+	assertHistoryKinds(t, app,
+		history.KindStarted, history.KindPaused, history.KindResumed, history.KindReset)
+}
+
+func TestHistoryLogsCreatedAndRemovedWithNames(t *testing.T) {
+	app, _ := newTestApp(t)
+	if _, err := app.AddNewTimer("Focus"); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.RemoveExistingTimer(1); err != nil {
+		t.Fatal(err)
+	}
+	entries := app.GetHistory()
+	assertHistoryKinds(t, app, history.KindCreated, history.KindRemoved)
+	for _, e := range entries {
+		if e.TimerName != "Focus" {
+			t.Fatalf("entry %+v should name the Focus timer", e)
+		}
+	}
+}
+
+func TestHistoryNamesUnnamedTimersByPosition(t *testing.T) {
+	app, _ := newTestApp(t)
+	app.StartTimer()
+	if got := app.GetHistory()[0].TimerName; got != "Timer 1" {
+		t.Fatalf("unnamed timer logged as %q, want %q", got, "Timer 1")
+	}
+}
+
+func TestHistoryLogsFinishFromRemovingTime(t *testing.T) {
+	app, _ := newTestApp(t)
+	app.StartTimer()
+	app.RemoveTimeCustom(settings.Default().DefaultDurationSecs + 1)
+	assertHistoryKinds(t, app, history.KindStarted, history.KindFinished)
+}
+
+// A timer that runs out on its own has no App call to hook; the status poll
+// is where the finish is noticed, so polling must sync the log.
+func TestHistoryStatusPollNoticesTransitions(t *testing.T) {
+	app, _ := newTestApp(t)
+	app.timers.Active().Start()
+	assertHistoryKinds(t, app)
+	app.GetTimerStatus()
+	assertHistoryKinds(t, app, history.KindStarted)
+}
+
+func TestHistoryLogsPauseWhenSwitchingAwayFromRunningTimer(t *testing.T) {
+	app, _ := newTestApp(t)
+	if _, err := app.AddNewTimer("Other"); err != nil {
+		t.Fatal(err)
+	}
+	app.StartTimer()
+	if err := app.SwitchTimer(1); err != nil {
+		t.Fatal(err)
+	}
+	entries := app.GetHistory()
+	assertHistoryKinds(t, app, history.KindCreated, history.KindStarted, history.KindPaused)
+	if entries[2].TimerName != "Timer 1" {
+		t.Fatalf("pause logged against %q, want the timer that was running", entries[2].TimerName)
+	}
+}
+
+// Saving settings while idle swaps the active timer for one with the new
+// default duration; that's not the user creating or removing anything.
+func TestHistoryIgnoresIdleTimerReplacement(t *testing.T) {
+	app, _ := newTestApp(t)
+	app.CreateTimer(600)
+	assertHistoryKinds(t, app)
+}
+
+func TestHistorySurvivesRestartWithoutReplayingRestoredTimers(t *testing.T) {
+	app, path := newTestApp(t)
+	if _, err := app.AddNewTimer("Focus"); err != nil {
+		t.Fatal(err)
+	}
+	app.StartTimer()
+
+	store, err := settings.OpenStoreAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reopened := newAppFromStore(store)
+	assertHistoryKinds(t, reopened, history.KindCreated, history.KindStarted)
+	// The restored timers are the baseline, not fresh creations.
+	reopened.GetTimerStatus()
+	assertHistoryKinds(t, reopened, history.KindCreated, history.KindStarted)
 }

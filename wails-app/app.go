@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"wails-app/internal/history"
 	"wails-app/internal/settings"
 	"wails-app/internal/timer"
 
@@ -31,13 +33,27 @@ type App struct {
 	settings       settings.AppSettings
 	store          *settings.Store
 	cancelAutosave context.CancelFunc
+	// history is derived by diffing timer state at each sync point (every
+	// mutation and every status poll), so no mutator has to name its event.
+	historyLog     *history.Log
+	historyTracker *history.Tracker[*timer.CountdownTimer]
 }
 
 func NewApp() *App {
 	store, err := settings.OpenStore()
+	if err != nil {
+		store = nil
+	}
+	return newAppFromStore(store)
+}
+
+// newAppFromStore builds the app from a store (nil when the config dir is
+// unavailable, in which case nothing persists).
+func newAppFromStore(store *settings.Store) *App {
 	s := settings.Default()
 	var collection *timer.TimerCollection
-	if err == nil {
+	var log *history.Log
+	if store != nil {
 		s = store.LoadSettings()
 		var snap timer.CollectionSnapshot
 		if ok, err := store.LoadTimerStates(&snap); err == nil && ok {
@@ -45,14 +61,62 @@ func NewApp() *App {
 		} else {
 			collection = timer.FromNames(store.LoadTimerNames(), s.DefaultDurationSecs)
 		}
+		var entries []history.Entry
+		if ok, err := store.LoadHistory(&entries); err == nil && ok {
+			log = history.FromEntries(entries)
+		}
 	} else {
 		collection = timer.FromNames(nil, s.DefaultDurationSecs)
 	}
-	return &App{
-		timers:   collection,
-		settings: s,
-		store:    store,
+	if log == nil {
+		log = history.NewLog()
 	}
+	a := &App{
+		timers:     collection,
+		settings:   s,
+		store:      store,
+		historyLog: log,
+	}
+	a.historyTracker = history.NewTracker[*timer.CountdownTimer](log)
+	a.historyTracker.Seed(a.observedTimers())
+	return a
+}
+
+// observedTimers is the tracker's view of the collection: identity, display
+// name, and run state per timer.
+func (a *App) observedTimers() []history.Observed[*timer.CountdownTimer] {
+	names := a.timers.TimerNames()
+	out := make([]history.Observed[*timer.CountdownTimer], len(names))
+	for i, name := range names {
+		t := a.timers.TimerAt(i)
+		out[i] = history.Observed[*timer.CountdownTimer]{ID: t, Name: displayName(name, i), State: t.StateName()}
+	}
+	return out
+}
+
+// displayName matches the frontend's label for an unnamed timer.
+func displayName(name string, index int) string {
+	if name == "" {
+		return fmt.Sprintf("Timer %d", index+1)
+	}
+	return name
+}
+
+// syncHistory logs whatever changed since the last sync and persists the log
+// if anything did. Callers hold a.mu.
+func (a *App) syncHistory() {
+	if !a.historyTracker.Sync(time.Now(), a.observedTimers()) {
+		return
+	}
+	if a.store != nil {
+		_ = a.store.SaveHistory(a.historyLog.Entries())
+	}
+}
+
+func (a *App) GetHistory() []history.Entry {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.historyLog.Entries()
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -103,6 +167,7 @@ func (a *App) PersistTimerStates() {
 func (a *App) GetTimerStatus() TimerStatus {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.syncHistory()
 	t := a.timers.Active()
 	remaining := t.Remaining()
 	// While on break the countdown is the break allocation left within the
@@ -128,68 +193,100 @@ func (a *App) GetTimerList() []timer.TimerInfo {
 	return a.timers.TimerList()
 }
 
-func (a *App) StartTimer()  { a.mu.Lock(); defer a.mu.Unlock(); a.timers.Active().Start() }
-func (a *App) PauseTimer()  { a.mu.Lock(); defer a.mu.Unlock(); a.timers.Active().Pause() }
-func (a *App) ResumeTimer() { a.mu.Lock(); defer a.mu.Unlock(); a.timers.Active().Resume() }
-func (a *App) ResetTimer()  { a.mu.Lock(); defer a.mu.Unlock(); a.timers.Active().Reset() }
+func (a *App) StartTimer() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	defer a.syncHistory()
+	a.timers.Active().Start()
+}
+func (a *App) PauseTimer() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	defer a.syncHistory()
+	a.timers.Active().Pause()
+}
+func (a *App) ResumeTimer() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	defer a.syncHistory()
+	a.timers.Active().Resume()
+}
+func (a *App) ResetTimer() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	defer a.syncHistory()
+	a.timers.Active().Reset()
+}
 
 func (a *App) AddTime() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	a.timers.Active().AddTime(time.Duration(a.settings.DefaultIncrementSecs) * time.Second)
 }
 
 func (a *App) RemoveTime() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	a.timers.Active().RemoveTime(time.Duration(a.settings.DefaultIncrementSecs) * time.Second)
 }
 
 func (a *App) AddTimeSecondary() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	a.timers.Active().AddTime(time.Duration(a.settings.SecondaryIncrementSecs) * time.Second)
 }
 
 func (a *App) RemoveTimeSecondary() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	a.timers.Active().RemoveTime(time.Duration(a.settings.SecondaryIncrementSecs) * time.Second)
 }
 
 func (a *App) AddTimeTertiary() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	a.timers.Active().AddTime(time.Duration(a.settings.TertiaryIncrementSecs) * time.Second)
 }
 
 func (a *App) RemoveTimeTertiary() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	a.timers.Active().RemoveTime(time.Duration(a.settings.TertiaryIncrementSecs) * time.Second)
 }
 
 func (a *App) AddTimeCustom(seconds uint64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	a.timers.Active().AddTime(time.Duration(seconds) * time.Second)
 }
 
 func (a *App) RemoveTimeCustom(seconds uint64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	a.timers.Active().RemoveTime(time.Duration(seconds) * time.Second)
 }
 
 func (a *App) CreateTimer(durationSecs uint64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
+	old := a.timers.Active()
 	a.timers.ReplaceActive(durationSecs)
+	a.historyTracker.Rekey(old, a.timers.Active())
 }
 
 func (a *App) AddNewTimer(name string) (int, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	idx, err := a.timers.AddTimer(name, a.settings.DefaultDurationSecs)
 	if err != nil {
 		return 0, err
@@ -203,6 +300,7 @@ func (a *App) AddNewTimer(name string) (int, error) {
 func (a *App) RemoveExistingTimer(index int) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	if err := a.timers.RemoveTimer(index); err != nil {
 		return err
 	}
@@ -215,15 +313,27 @@ func (a *App) RemoveExistingTimer(index int) error {
 func (a *App) SwitchTimer(index int) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	return a.timers.SwitchTo(index)
 }
 
-func (a *App) SwitchTimerNext() { a.mu.Lock(); defer a.mu.Unlock(); a.timers.SwitchNext() }
-func (a *App) SwitchTimerPrev() { a.mu.Lock(); defer a.mu.Unlock(); a.timers.SwitchPrev() }
+func (a *App) SwitchTimerNext() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	defer a.syncHistory()
+	a.timers.SwitchNext()
+}
+func (a *App) SwitchTimerPrev() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	defer a.syncHistory()
+	a.timers.SwitchPrev()
+}
 
 func (a *App) RenameTimer(index int, name string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	if err := a.timers.RenameTimer(index, name); err != nil {
 		return err
 	}
@@ -248,6 +358,7 @@ func (a *App) SetTimerTint(index int, tint string) error {
 func (a *App) ToggleBreakTimer() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	a.timers.ToggleBreakDesignation()
 	if a.store != nil {
 		_ = a.store.SaveTimerStates(a.timers.Snapshot())
@@ -259,6 +370,7 @@ func (a *App) ToggleBreakTimer() {
 func (a *App) SetMaxTime() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	a.timers.SetMaxToCurrent()
 	if a.store != nil {
 		_ = a.store.SaveTimerStates(a.timers.Snapshot())
@@ -268,6 +380,7 @@ func (a *App) SetMaxTime() {
 func (a *App) ToggleBreak() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.syncHistory()
 	return a.timers.ToggleBreak()
 }
 

@@ -5,6 +5,7 @@
   import Controls from "./components/Controls.svelte";
   import TopBar from "./components/TopBar.svelte";
   import Settings from "./components/Settings.svelte";
+  import History from "./components/History.svelte";
   import Toast from "./components/Toast.svelte";
   import StackedBar from "./components/StackedBar.svelte";
 
@@ -37,6 +38,10 @@
       </div>
       <StackedBar />
     </div>
+  {/if}
+
+  {#if timer.showHistory}
+    <History />
   {/if}
 
   <Toast />

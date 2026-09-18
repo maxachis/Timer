@@ -90,6 +90,8 @@ export async function invoke<T = unknown>(cmd: string, args?: Args): Promise<T> 
       return (await App.ResetBreakTime()) as T;
     case "get_settings":
       return (await App.GetSettings()) as T;
+    case "get_history":
+      return (await App.GetHistory()) as T;
     case "save_settings":
       return (await App.SaveSettings((a as any).newSettings)) as T;
   }

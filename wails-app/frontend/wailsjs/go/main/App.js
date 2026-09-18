@@ -38,6 +38,10 @@ export function CreateTimer(arg1) {
   return window['go']['main']['App']['CreateTimer'](arg1);
 }
 
+export function GetHistory() {
+  return window['go']['main']['App']['GetHistory']();
+}
+
 export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }

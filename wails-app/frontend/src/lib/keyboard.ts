@@ -9,6 +9,10 @@ export function handleNameKeydown(event: KeyboardEvent) {
 }
 
 export function handleKeydown(event: KeyboardEvent) {
+  if (timer.showHistory) {
+    if (event.key === "Escape") timer.closeHistory();
+    return;
+  }
   if (timer.showSettings) return;
   if (timer.editingName) return;
   // Alt+<n> jumps to the nth block from the top of the stacked bar. Guarded

@@ -2,6 +2,7 @@ import { invoke, windowApi } from "../ipc";
 import { playAlertSound, playStartBlip, playStopBlip } from "./audio";
 import { sendCompletionNotification } from "./notifications";
 import { TINTS, type TimerListEntry, type TimerStatus } from "./tints";
+import type { HistoryEntry } from "./history";
 
 const getCurrentWindow = () => windowApi;
 
@@ -53,6 +54,8 @@ class TimerStore {
   editingName = $state(false);
   editNameValue = $state("");
   showTintMenu = $state(false);
+  showHistory = $state(false);
+  historyEntries: HistoryEntry[] = $state([]);
 
   // Break mode
   onBreak = $state(false);
@@ -133,6 +136,17 @@ class TimerStore {
 
   closeSettings() {
     this.showSettings = false;
+  }
+
+  async openHistory() {
+    const entries = await invoke<HistoryEntry[]>("get_history");
+    // The backend returns oldest first; the view reads newest first.
+    this.historyEntries = [...entries].reverse();
+    this.showHistory = true;
+  }
+
+  closeHistory() {
+    this.showHistory = false;
   }
 
   async saveSettings() {

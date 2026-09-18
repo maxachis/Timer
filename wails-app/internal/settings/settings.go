@@ -17,6 +17,10 @@ const (
 	MiniWindowSizeMax    uint64 = 400
 
 	StoreFileName = "settings.json"
+
+	// Keys for the opaque JSON blobs the app stores beside its settings.
+	timerStatesKey = "timer_states"
+	historyKey     = "history"
 )
 
 type AppSettings struct {
@@ -184,20 +188,32 @@ func (s *Store) SaveTimerNames(names []string) error {
 // timers (typically a timer.CollectionSnapshot) so that the app can rehydrate
 // timer state across restarts. The settings package stays unaware of the
 // timer package by accepting an opaque value here.
-func (s *Store) SaveTimerStates(v any) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	s.data["timer_states"] = b
-	return s.flush()
-}
+func (s *Store) SaveTimerStates(v any) error { return s.saveJSON(timerStatesKey, v) }
 
 // LoadTimerStates unmarshals the stored snapshot into out. Returns ok=false
 // when no snapshot is stored (no error). A malformed snapshot returns an
 // error so callers can decide to fall back to defaults.
-func (s *Store) LoadTimerStates(out any) (bool, error) {
-	v, ok := s.data["timer_states"]
+func (s *Store) LoadTimerStates(out any) (bool, error) { return s.loadJSON(timerStatesKey, out) }
+
+// SaveHistory persists the timer activity log (a []history.Entry), kept
+// opaque here for the same reason as SaveTimerStates.
+func (s *Store) SaveHistory(v any) error { return s.saveJSON(historyKey, v) }
+
+// LoadHistory unmarshals the stored activity log into out; ok=false when
+// none is stored.
+func (s *Store) LoadHistory(out any) (bool, error) { return s.loadJSON(historyKey, out) }
+
+func (s *Store) saveJSON(key string, v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	s.data[key] = b
+	return s.flush()
+}
+
+func (s *Store) loadJSON(key string, out any) (bool, error) {
+	v, ok := s.data[key]
 	if !ok {
 		return false, nil
 	}

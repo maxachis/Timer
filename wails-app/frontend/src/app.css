@@ -629,6 +629,186 @@ main.finished .separator {
   background-image: linear-gradient(45deg, transparent 43%, var(--amber-alert) 45%, var(--amber-alert) 55%, transparent 57%) !important;
 }
 
+/* History */
+.history-btn {
+  position: absolute;
+  top: 1rem;
+  left: 6rem;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e0dbd3;
+  border-radius: 8px;
+  background: white;
+  color: var(--stone);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-btn);
+  transition: all 0.2s ease;
+  opacity: 0.6;
+}
+
+.history-btn:hover {
+  opacity: 1;
+  box-shadow: var(--shadow-btn-hover);
+  transform: translateY(-1px);
+}
+
+.history-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(44, 44, 44, 0.28);
+  border: none;
+  z-index: 30;
+  --wails-draggable: no-drag;
+  cursor: default;
+}
+
+.history-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(380px, calc(100vw - 2rem));
+  max-height: min(72vh, 520px);
+  display: flex;
+  flex-direction: column;
+  background: var(--warm-white);
+  border: 1px solid var(--ring-track);
+  border-radius: 14px;
+  box-shadow: var(--shadow-btn-hover);
+  z-index: 31;
+  --wails-draggable: no-drag;
+  overflow: hidden;
+  /* main centres everything for the timer face; a log reads as columns. */
+  text-align: left;
+  animation: fade-in 0.3s ease;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1rem 0.6rem;
+  border-bottom: 1px solid var(--ring-track);
+}
+
+.history-title {
+  font-family: "DM Serif Display", serif;
+  font-size: 1.15rem;
+  font-weight: 400;
+  color: var(--charcoal);
+  letter-spacing: 0.02em;
+}
+
+.history-close-btn {
+  position: static;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e0dbd3;
+  border-radius: 8px;
+  background: white;
+  color: var(--stone);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-btn);
+  transition: all 0.2s ease;
+  opacity: 0.6;
+}
+
+.history-close-btn:hover {
+  opacity: 1;
+  box-shadow: var(--shadow-btn-hover);
+  transform: translateY(-1px);
+  color: var(--amber-alert);
+  border-color: var(--amber-alert);
+  background: rgba(212, 118, 58, 0.06);
+}
+
+.history-list {
+  overflow-y: auto;
+  min-height: 0;
+  padding: 0.4rem 0 0.6rem;
+  user-select: text;
+}
+
+.history-day {
+  position: sticky;
+  top: 0;
+  background: var(--warm-white);
+  font-family: "Anybody", sans-serif;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--stone);
+  padding: 0.5rem 1rem 0.25rem;
+}
+
+.history-row {
+  display: grid;
+  grid-template-columns: 5.4rem 4.6rem 1fr;
+  gap: 0.5rem;
+  align-items: baseline;
+  padding: 0.3rem 1rem;
+  font-size: 0.8rem;
+}
+
+.history-row:hover {
+  background: rgba(44, 44, 44, 0.03);
+}
+
+.history-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--stone);
+  font-size: 0.75rem;
+}
+
+.history-kind {
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+}
+
+.history-row[data-kind="created"] .history-kind,
+.history-row[data-kind="started"] .history-kind,
+.history-row[data-kind="resumed"] .history-kind {
+  color: var(--brass-dark);
+}
+
+.history-row[data-kind="paused"] .history-kind,
+.history-row[data-kind="reset"] .history-kind {
+  color: var(--stone);
+}
+
+.history-row[data-kind="finished"] .history-kind {
+  color: var(--amber-alert);
+}
+
+.history-row[data-kind="removed"] .history-kind {
+  color: var(--stone);
+  opacity: 0.75;
+}
+
+.history-name {
+  color: var(--charcoal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: var(--stone);
+  font-size: 0.8rem;
+}
+
 /* Window controls (minimize / close) */
 .window-btn {
   position: fixed;
@@ -879,6 +1059,8 @@ main.settings-view {
   .add-timer-btn { display: none; }
   .tint-btn { display: none; }
   .tint-popover, .tint-backdrop { display: none; }
+  .history-btn { display: none; }
+  .history-modal, .history-backdrop { display: none; }
   .window-btn { display: none; }
   .timer-name-area { display: none; }
 

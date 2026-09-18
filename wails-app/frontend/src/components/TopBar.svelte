@@ -61,6 +61,17 @@
   </div>
 {/if}
 
+<!-- History button -->
+<button class="history-btn" onclick={() => timer.openHistory()} aria-label="History">
+  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="8" cy="8.5" r="5.5" />
+    <path d="M8 5.5V8.5L10 10" />
+    <path d="M3 3.5A6.5 6.5 0 0 0 2.2 6" />
+    <path d="M2.2 6L1 5.2" />
+    <path d="M2.2 6L3.4 6.6" />
+  </svg>
+</button>
+
 <!-- Minimize button -->
 <button class="window-btn minimize-btn" onclick={() => timer.handleMinimize()} aria-label="Minimize">
   <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">

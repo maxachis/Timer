@@ -284,3 +284,33 @@ func TestSaveSettingsStripsLegacyMiniWindowSize(t *testing.T) {
 		t.Fatal("legacy key should be removed")
 	}
 }
+
+func TestStoreHistoryRoundtripIsIndependentOfTimerStates(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	s, err := OpenStoreAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var missing []tsPayload
+	if ok, err := s.LoadHistory(&missing); err != nil || ok {
+		t.Fatalf("expected ok=false on missing key, got ok=%v err=%v", ok, err)
+	}
+	in := []tsPayload{{Hello: "created", N: 1}, {Hello: "removed", N: 2}}
+	if err := s.SaveHistory(in); err != nil {
+		t.Fatal(err)
+	}
+	s2, _ := OpenStoreAt(path)
+	var got []tsPayload
+	ok, err := s2.LoadHistory(&got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || len(got) != 2 || got[1] != in[1] {
+		t.Fatalf("roundtrip mismatch: ok=%v got=%+v", ok, got)
+	}
+	var states tsPayload
+	if ok, _ := s2.LoadTimerStates(&states); ok {
+		t.Fatal("history must not be stored under the timer_states key")
+	}
+}
