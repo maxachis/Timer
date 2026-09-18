@@ -35,3 +35,4 @@ The `-tags webkit2_41` flag is required on Ubuntu 24.04+, which ships `libwebkit
 ## Mistakes
 
 - **[tooling]**: On Ubuntu 24.04+ only `libwebkit2gtk-4.1-dev` is available, not 4.0. `wails dev` → `wails dev -tags webkit2_41`.
+- **[env]**: `wails dev`/`wails build` failing with `internal error: package "time" without types was imported from wails-app/internal/<pkg>` is the Wails CLI binary (built against an older `x/tools`) unable to read the current Go toolchain's export data — the pristine tree fails identically, and the named package is just whichever loaded first. Fix the CLI (reinstall `wails` with the current Go), don't debug the package. `go test ./...` and `wails generate module` are unaffected.
