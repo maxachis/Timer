@@ -234,3 +234,91 @@ func TestHistorySurvivesRestartWithoutReplayingRestoredTimers(t *testing.T) {
 	reopened.GetTimerStatus()
 	assertHistoryKinds(t, reopened, history.KindCreated, history.KindStarted)
 }
+
+// Every change to timer state is written to disk as it happens, so a crash
+// or power cut can't undo it. Before this, only structural edits (add,
+// remove, rename) saved immediately; starts, pauses, time adjustments, and
+// break changes waited up to 30 seconds for the periodic autosave.
+func TestEveryTimerChangeIsSavedImmediately(t *testing.T) {
+	designateBreak := func(a *App) {
+		_, _ = a.AddNewTimer("Break")
+		_ = a.SwitchTimer(1)
+		a.ToggleBreakTimer()
+		_ = a.SwitchTimer(0)
+	}
+	withBreakTime := func(a *App) {
+		designateBreak(a)
+		a.AddBreakTime()
+	}
+	cases := []struct {
+		name   string
+		setup  func(*App)
+		change func(*App)
+	}{
+		{"start", nil, (*App).StartTimer},
+		{"pause", (*App).StartTimer, (*App).PauseTimer},
+		{"resume", func(a *App) { a.StartTimer(); a.PauseTimer() }, (*App).ResumeTimer},
+		{"reset", (*App).StartTimer, (*App).ResetTimer},
+		{"add time", nil, (*App).AddTime},
+		{"remove time", nil, (*App).RemoveTime},
+		{"add secondary", nil, (*App).AddTimeSecondary},
+		{"remove secondary", nil, (*App).RemoveTimeSecondary},
+		{"add tertiary", nil, (*App).AddTimeTertiary},
+		{"remove tertiary", (*App).AddTimeTertiary, (*App).RemoveTimeTertiary},
+		{"add custom", nil, func(a *App) { a.AddTimeCustom(90) }},
+		{"remove custom", nil, func(a *App) { a.RemoveTimeCustom(90) }},
+		{"replace idle timer", nil, func(a *App) { a.CreateTimer(600) }},
+		{"switch", func(a *App) { _, _ = a.AddNewTimer("B") }, func(a *App) { _ = a.SwitchTimer(1) }},
+		{"switch next", func(a *App) { _, _ = a.AddNewTimer("B") }, (*App).SwitchTimerNext},
+		{"switch prev", func(a *App) { _, _ = a.AddNewTimer("B") }, (*App).SwitchTimerPrev},
+		{"start break", withBreakTime, func(a *App) { _ = a.ToggleBreak() }},
+		{"add break time", designateBreak, (*App).AddBreakTime},
+		{"remove break time", withBreakTime, (*App).RemoveBreakTime},
+		{"add break secondary", designateBreak, (*App).AddBreakTimeSecondary},
+		{"remove break secondary", withBreakTime, (*App).RemoveBreakTimeSecondary},
+		{"add break tertiary", designateBreak, (*App).AddBreakTimeTertiary},
+		{"remove break tertiary", withBreakTime, (*App).RemoveBreakTimeTertiary},
+		{"reset break time", withBreakTime, (*App).ResetBreakTime},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app, path := newTestApp(t)
+			if tc.setup != nil {
+				tc.setup(app)
+			}
+			before, _ := loadSnap(t, path)
+
+			tc.change(app)
+
+			saved, ok := loadSnap(t, path)
+			if !ok {
+				t.Fatal("timer state not written")
+			}
+			want := app.timers.Snapshot()
+			if !sameSavedState(saved, want) {
+				t.Fatalf("saved state is stale\nsaved: %+v\nwant:  %+v\n(before change: %+v)", saved, want, before)
+			}
+		})
+	}
+}
+
+// sameSavedState compares snapshots, allowing elapsed time on a running
+// timer to have moved on slightly between the save and the comparison.
+func sameSavedState(a, b timer.CollectionSnapshot) bool {
+	const tolerance = 50 * time.Millisecond
+	if a.ActiveIndex != b.ActiveIndex || len(a.Timers) != len(b.Timers) {
+		return false
+	}
+	if (a.Break == nil) != (b.Break == nil) || (a.Break != nil && *a.Break != *b.Break) {
+		return false
+	}
+	for i := range a.Timers {
+		x, y := a.Timers[i], b.Timers[i]
+		diff := time.Duration(int64(x.ElapsedMs)-int64(y.ElapsedMs)) * time.Millisecond
+		x.ElapsedMs, y.ElapsedMs = 0, 0
+		if x != y || diff > tolerance || diff < -tolerance {
+			return false
+		}
+	}
+	return true
+}

@@ -113,6 +113,16 @@ func (a *App) syncHistory() {
 	}
 }
 
+// commitChange runs after every timer mutation: it logs any history the
+// change produced and saves the timer collection, so the change survives a
+// crash rather than waiting for the next autosave. Callers hold a.mu.
+func (a *App) commitChange() {
+	a.syncHistory()
+	if a.store != nil {
+		_ = a.store.SaveTimerStates(a.timers.Snapshot())
+	}
+}
+
 func (a *App) GetHistory() []history.Entry {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -196,88 +206,88 @@ func (a *App) GetTimerList() []timer.TimerInfo {
 func (a *App) StartTimer() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.Active().Start()
 }
 func (a *App) PauseTimer() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.Active().Pause()
 }
 func (a *App) ResumeTimer() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.Active().Resume()
 }
 func (a *App) ResetTimer() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.Active().Reset()
 }
 
 func (a *App) AddTime() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.Active().AddTime(time.Duration(a.settings.DefaultIncrementSecs) * time.Second)
 }
 
 func (a *App) RemoveTime() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.Active().RemoveTime(time.Duration(a.settings.DefaultIncrementSecs) * time.Second)
 }
 
 func (a *App) AddTimeSecondary() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.Active().AddTime(time.Duration(a.settings.SecondaryIncrementSecs) * time.Second)
 }
 
 func (a *App) RemoveTimeSecondary() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.Active().RemoveTime(time.Duration(a.settings.SecondaryIncrementSecs) * time.Second)
 }
 
 func (a *App) AddTimeTertiary() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.Active().AddTime(time.Duration(a.settings.TertiaryIncrementSecs) * time.Second)
 }
 
 func (a *App) RemoveTimeTertiary() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.Active().RemoveTime(time.Duration(a.settings.TertiaryIncrementSecs) * time.Second)
 }
 
 func (a *App) AddTimeCustom(seconds uint64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.Active().AddTime(time.Duration(seconds) * time.Second)
 }
 
 func (a *App) RemoveTimeCustom(seconds uint64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.Active().RemoveTime(time.Duration(seconds) * time.Second)
 }
 
 func (a *App) CreateTimer(durationSecs uint64) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	old := a.timers.Active()
 	a.timers.ReplaceActive(durationSecs)
 	a.historyTracker.Rekey(old, a.timers.Active())
@@ -286,13 +296,10 @@ func (a *App) CreateTimer(durationSecs uint64) {
 func (a *App) AddNewTimer(name string) (int, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	idx, err := a.timers.AddTimer(name, a.settings.DefaultDurationSecs)
 	if err != nil {
 		return 0, err
-	}
-	if a.store != nil {
-		_ = a.store.SaveTimerStates(a.timers.Snapshot())
 	}
 	return idx, nil
 }
@@ -300,12 +307,9 @@ func (a *App) AddNewTimer(name string) (int, error) {
 func (a *App) RemoveExistingTimer(index int) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	if err := a.timers.RemoveTimer(index); err != nil {
 		return err
-	}
-	if a.store != nil {
-		_ = a.store.SaveTimerStates(a.timers.Snapshot())
 	}
 	return nil
 }
@@ -313,32 +317,29 @@ func (a *App) RemoveExistingTimer(index int) error {
 func (a *App) SwitchTimer(index int) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	return a.timers.SwitchTo(index)
 }
 
 func (a *App) SwitchTimerNext() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.SwitchNext()
 }
 func (a *App) SwitchTimerPrev() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.SwitchPrev()
 }
 
 func (a *App) RenameTimer(index int, name string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	if err := a.timers.RenameTimer(index, name); err != nil {
 		return err
-	}
-	if a.store != nil {
-		_ = a.store.SaveTimerStates(a.timers.Snapshot())
 	}
 	return nil
 }
@@ -346,11 +347,9 @@ func (a *App) RenameTimer(index int, name string) error {
 func (a *App) SetTimerTint(index int, tint string) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.commitChange()
 	if err := a.timers.SetTint(index, tint); err != nil {
 		return err
-	}
-	if a.store != nil {
-		_ = a.store.SaveTimerStates(a.timers.Snapshot())
 	}
 	return nil
 }
@@ -358,11 +357,8 @@ func (a *App) SetTimerTint(index int, tint string) error {
 func (a *App) ToggleBreakTimer() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.ToggleBreakDesignation()
-	if a.store != nil {
-		_ = a.store.SaveTimerStates(a.timers.Snapshot())
-	}
 }
 
 // SetMaxTime commits the active timer's current time as its maximum, so that
@@ -370,59 +366,63 @@ func (a *App) ToggleBreakTimer() {
 func (a *App) SetMaxTime() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	a.timers.SetMaxToCurrent()
-	if a.store != nil {
-		_ = a.store.SaveTimerStates(a.timers.Snapshot())
-	}
 }
 
 func (a *App) ToggleBreak() error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	defer a.syncHistory()
+	defer a.commitChange()
 	return a.timers.ToggleBreak()
 }
 
 func (a *App) AddBreakTime() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.commitChange()
 	a.timers.AddBreakTime(time.Duration(a.settings.DefaultIncrementSecs) * time.Second)
 }
 
 func (a *App) RemoveBreakTime() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.commitChange()
 	a.timers.RemoveBreakTime(time.Duration(a.settings.DefaultIncrementSecs) * time.Second)
 }
 
 func (a *App) AddBreakTimeSecondary() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.commitChange()
 	a.timers.AddBreakTime(time.Duration(a.settings.SecondaryIncrementSecs) * time.Second)
 }
 
 func (a *App) RemoveBreakTimeSecondary() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.commitChange()
 	a.timers.RemoveBreakTime(time.Duration(a.settings.SecondaryIncrementSecs) * time.Second)
 }
 
 func (a *App) AddBreakTimeTertiary() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.commitChange()
 	a.timers.AddBreakTime(time.Duration(a.settings.TertiaryIncrementSecs) * time.Second)
 }
 
 func (a *App) RemoveBreakTimeTertiary() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.commitChange()
 	a.timers.RemoveBreakTime(time.Duration(a.settings.TertiaryIncrementSecs) * time.Second)
 }
 
 func (a *App) ResetBreakTime() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	defer a.commitChange()
 	a.timers.ResetBreakTime()
 }
 
