@@ -34,6 +34,9 @@ type Entry struct {
 	At        time.Time `json:"at"`
 	Kind      string    `json:"kind"`
 	TimerName string    `json:"timer_name"`
+	// RemainingMs is the timer's clock reading when it was paused or resumed;
+	// absent for every other kind, and for entries logged before it existed.
+	RemainingMs *int64 `json:"remaining_ms,omitempty"`
 }
 
 // Log is an append-only, capped list of entries, oldest first.
@@ -55,7 +58,11 @@ func FromEntries(entries []Entry) *Log {
 }
 
 func (l *Log) Record(kind, timerName string, at time.Time) {
-	l.entries = append(l.entries, Entry{At: at, Kind: kind, TimerName: timerName})
+	l.add(Entry{At: at, Kind: kind, TimerName: timerName})
+}
+
+func (l *Log) add(e Entry) {
+	l.entries = append(l.entries, e)
 	if len(l.entries) > MaxEntries {
 		l.entries = l.entries[len(l.entries)-MaxEntries:]
 	}
@@ -72,9 +79,10 @@ func (l *Log) Entries() []Entry {
 // across syncs (the app uses the timer's pointer); indices won't do because
 // removing a timer shifts everything after it.
 type Observed[K comparable] struct {
-	ID    K
-	Name  string
-	State string
+	ID        K
+	Name      string
+	State     string
+	Remaining time.Duration
 }
 
 type seen struct {
@@ -122,7 +130,7 @@ func (t *Tracker[K]) Sync(now time.Time, timers []Observed[K]) bool {
 			t.log.Record(KindCreated, o.Name, now)
 			logged = true
 		} else if kind := transitionKind(prev.state, o.State); kind != "" {
-			t.log.Record(kind, o.Name, now)
+			t.log.add(transitionEntry(kind, o, now))
 			logged = true
 		}
 		t.last[o.ID] = seen{name: o.Name, state: o.State}
@@ -135,6 +143,17 @@ func (t *Tracker[K]) Sync(now time.Time, timers []Observed[K]) bool {
 		}
 	}
 	return logged
+}
+
+// transitionEntry builds the log entry for a run-state change, stamping
+// pauses and resumes with the clock reading at that moment.
+func transitionEntry[K comparable](kind string, o Observed[K], now time.Time) Entry {
+	e := Entry{At: now, Kind: kind, TimerName: o.Name}
+	if kind == KindPaused || kind == KindResumed {
+		ms := o.Remaining.Milliseconds()
+		e.RemainingMs = &ms
+	}
+	return e
 }
 
 // transitionKind names the event a run-state change represents, or "" when

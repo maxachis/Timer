@@ -83,13 +83,18 @@ func newAppFromStore(store *settings.Store) *App {
 }
 
 // observedTimers is the tracker's view of the collection: identity, display
-// name, and run state per timer.
+// name, run state, and clock reading per timer.
 func (a *App) observedTimers() []history.Observed[*timer.CountdownTimer] {
 	names := a.timers.TimerNames()
 	out := make([]history.Observed[*timer.CountdownTimer], len(names))
 	for i, name := range names {
 		t := a.timers.TimerAt(i)
-		out[i] = history.Observed[*timer.CountdownTimer]{ID: t, Name: displayName(name, i), State: t.StateName()}
+		out[i] = history.Observed[*timer.CountdownTimer]{
+			ID:        t,
+			Name:      displayName(name, i),
+			State:     t.StateName(),
+			Remaining: t.Remaining(),
+		}
 	}
 	return out
 }

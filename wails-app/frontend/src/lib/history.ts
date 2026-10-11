@@ -6,6 +6,7 @@ export interface HistoryEntry {
   at: string; // RFC3339 timestamp with offset
   kind: HistoryKind;
   timer_name: string;
+  remaining_ms?: number; // clock reading, on paused/resumed entries only
 }
 
 export const HISTORY_KINDS = [
@@ -36,6 +37,18 @@ export function formatEntryTime(at: string): string {
     minute: "2-digit",
     second: "2-digit",
   });
+}
+
+const MS_PER_SECOND = 1000;
+const SECONDS_PER_MINUTE = 60;
+
+// Formats a clock reading the way the timer face shows it: whole minutes
+// (unbounded) and seconds, partial seconds dropped.
+export function formatClockReading(ms: number): string {
+  const totalSecs = Math.floor(ms / MS_PER_SECOND);
+  const minutes = Math.floor(totalSecs / SECONDS_PER_MINUTE);
+  const seconds = totalSecs % SECONDS_PER_MINUTE;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 const TODAY_LABEL = "Today";

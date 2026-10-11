@@ -322,3 +322,23 @@ func sameSavedState(a, b timer.CollectionSnapshot) bool {
 	}
 	return true
 }
+
+// The app must feed each timer's live clock reading into the log, not just
+// its run state, for pause/resume entries to show where the clock stood.
+func TestHistoryPauseAndResumeRecordClockReading(t *testing.T) {
+	app, _ := newTestApp(t)
+	app.StartTimer()
+	app.RemoveTimeCustom(60)
+	app.PauseTimer()
+	app.ResumeTimer()
+
+	full := int64(settings.Default().DefaultDurationSecs) * 1000
+	for _, e := range app.GetHistory()[1:] {
+		if e.RemainingMs == nil {
+			t.Fatalf("%s entry has no clock reading", e.Kind)
+		}
+		if got := *e.RemainingMs; got > full-60_000 || got < full-61_000 {
+			t.Fatalf("%s entry remaining = %dms, want about %dms", e.Kind, got, full-60_000)
+		}
+	}
+}

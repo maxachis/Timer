@@ -181,3 +181,28 @@ func TestRekeyTreatsReplacementAsSameTimer(t *testing.T) {
 		t.Fatalf("rekeyed replacement logged %d entries", n)
 	}
 }
+
+// Pause and resume entries carry the clock reading at that moment, so the
+// log shows how far into the countdown the user stopped and picked back up.
+func TestSyncRecordsRemainingTimeOnPauseAndResume(t *testing.T) {
+	tr, l := newTracker()
+	tr.Seed([]Observed[int]{obs(1, "A", StateIdle)})
+
+	at := func(state string, remaining time.Duration) []Observed[int] {
+		return []Observed[int]{{ID: 1, Name: "A", State: state, Remaining: remaining}}
+	}
+	tr.Sync(t0, at(StateRunning, 5*time.Minute))
+	tr.Sync(t0, at(StatePaused, 3*time.Minute+20*time.Second))
+	tr.Sync(t0, at(StateRunning, 3*time.Minute+20*time.Second))
+
+	got := l.Entries()
+	assertKinds(t, got, KindStarted, KindPaused, KindResumed)
+	if got[0].RemainingMs != nil {
+		t.Fatalf("started entry carries remaining %d, want none", *got[0].RemainingMs)
+	}
+	for _, e := range got[1:] {
+		if e.RemainingMs == nil || *e.RemainingMs != 200_000 {
+			t.Fatalf("%s entry remaining = %v, want 200000ms", e.Kind, e.RemainingMs)
+		}
+	}
+}

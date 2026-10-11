@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   groupByDay,
   formatEntryTime,
+  formatClockReading,
   KIND_LABELS,
   HISTORY_KINDS,
   type HistoryEntry,
@@ -67,5 +68,17 @@ describe("KIND_LABELS", () => {
       expect(KIND_LABELS[kind]).toBeTruthy();
     }
     expect(Object.keys(KIND_LABELS).sort()).toEqual([...HISTORY_KINDS].sort());
+  });
+});
+
+// Pause/resume entries show the countdown as it read on the timer face, so
+// the format and rounding must match the face exactly.
+describe("formatClockReading", () => {
+  it("shows the reading as MM:SS, dropping partial seconds like the face does", () => {
+    expect(formatClockReading(200_999)).toBe("03:20");
+  });
+
+  it("lets minutes run past an hour rather than rolling into hours", () => {
+    expect(formatClockReading(90 * 60_000)).toBe("90:00");
   });
 });

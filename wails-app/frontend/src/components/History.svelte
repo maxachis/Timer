@@ -1,6 +1,6 @@
 <script lang="ts">
   import { timer } from "../lib/timerStore.svelte";
-  import { groupByDay, formatEntryTime, KIND_LABELS } from "../lib/history";
+  import { groupByDay, formatEntryTime, formatClockReading, KIND_LABELS } from "../lib/history";
 
   const groups = $derived(groupByDay(timer.historyEntries));
 </script>
@@ -28,6 +28,9 @@
             <span class="history-time">{formatEntryTime(entry.at)}</span>
             <span class="history-kind">{KIND_LABELS[entry.kind]}</span>
             <span class="history-name">{entry.timer_name}</span>
+            {#if entry.remaining_ms !== undefined}
+              <span class="history-reading">{formatClockReading(entry.remaining_ms)}</span>
+            {/if}
           </div>
         {/each}
       {/each}
