@@ -2,6 +2,8 @@ package settings
 
 import (
 	"encoding/json"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -312,5 +314,67 @@ func TestStoreHistoryRoundtripIsIndependentOfTimerStates(t *testing.T) {
 	var states tsPayload
 	if ok, _ := s2.LoadTimerStates(&states); ok {
 		t.Fatal("history must not be stored under the timer_states key")
+	}
+}
+
+// A save must never leave the store file half-written: a power cut mid-save
+// would otherwise leave an empty or truncated file, and the app would start
+// over from defaults, losing every timer, setting, and history entry. The new
+// contents are written aside and swapped in, so a reader holding the old file
+// still sees it whole.
+func TestSaveSwapsInNewFileInsteadOfRewritingInPlace(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	s, _ := OpenStoreAt(path)
+	if err := s.SaveTimerNames([]string{"Before"}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer old.Close()
+
+	if err := s.SaveTimerNames([]string{"After"}); err != nil {
+		t.Fatal(err)
+	}
+
+	stillThere, err := io.ReadAll(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(stillThere) != string(before) {
+		t.Fatalf("old file was rewritten in place:\n%s", stillThere)
+	}
+	s2, _ := OpenStoreAt(path)
+	if names := s2.LoadTimerNames(); len(names) != 1 || names[0] != "After" {
+		t.Fatalf("new contents not saved: %v", names)
+	}
+}
+
+// The write-aside file is an implementation detail; it must not accumulate
+// next to the store.
+func TestSaveLeavesNoStrayFilesBehind(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := OpenStoreAt(filepath.Join(dir, "settings.json"))
+	for i := 0; i < 3; i++ {
+		if err := s.SaveTimerNames([]string{"X"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "settings.json" {
+		names := make([]string, len(entries))
+		for i, e := range entries {
+			names[i] = e.Name()
+		}
+		t.Fatalf("expected only settings.json, got %v", names)
 	}
 }

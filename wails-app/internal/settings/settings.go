@@ -236,5 +236,57 @@ func (s *Store) flush() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(s.path, b, 0o644)
+	return writeFileAtomic(s.path, b, 0o644)
+}
+
+// writeFileAtomic replaces path with data so that, even across a power cut,
+// the file is either entirely old or entirely new — never empty or truncated.
+// The data is written and synced to a sibling temp file, renamed over path,
+// and the directory synced so the rename itself is durable.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(perm); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	committed = true
+	syncDir(dir)
+	return nil
+}
+
+// syncDir flushes a directory entry change (such as a rename) to disk.
+// Best effort: platforms that can't sync a directory (Windows) skip it, and
+// the rename has already landed either way.
+func syncDir(dir string) {
+	d, err := os.Open(dir)
+	if err != nil {
+		return
+	}
+	defer d.Close()
+	_ = d.Sync()
 }
