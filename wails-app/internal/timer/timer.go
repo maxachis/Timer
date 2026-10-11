@@ -557,6 +557,20 @@ type TimerSnapshot struct {
 type CollectionSnapshot struct {
 	Timers      []TimerSnapshot `json:"timers"`
 	ActiveIndex int             `json:"active_index"`
+	Break       *BreakSnapshot  `json:"break,omitempty"`
+}
+
+// BreakSnapshot is the break-timer state of a collection. It is absent when
+// no break timer is designated, and in snapshots saved before break state
+// was persisted. An in-progress break is kept as-is: the break timer itself
+// snapshots as paused like any running timer, so its consumed time freezes.
+type BreakSnapshot struct {
+	Index            int    `json:"index"`
+	AccruedMs        uint64 `json:"accrued_ms"`
+	OnBreak          bool   `json:"on_break"`
+	PreBreakActive   int    `json:"pre_break_active"`
+	PreBreakRunning  bool   `json:"pre_break_running"`
+	StartRemainingMs uint64 `json:"start_remaining_ms"`
 }
 
 func msOf(d time.Duration) uint64 { return uint64(d / time.Millisecond) }
@@ -589,7 +603,39 @@ func (c *TimerCollection) Snapshot() CollectionSnapshot {
 			Tint:               nt.Tint,
 		}
 	}
+	out.Break = c.breakSnapshot()
 	return out
+}
+
+func (c *TimerCollection) breakSnapshot() *BreakSnapshot {
+	if c.breakIndex < 0 {
+		return nil
+	}
+	return &BreakSnapshot{
+		Index:            c.breakIndex,
+		AccruedMs:        msOf(c.breakAccrued),
+		OnBreak:          c.onBreak,
+		PreBreakActive:   c.preBreakActive,
+		PreBreakRunning:  c.preBreakRunning,
+		StartRemainingMs: msOf(c.breakStartRemaining),
+	}
+}
+
+// restoreBreak reapplies saved break state, dropping it if it names a timer
+// that no longer exists.
+func (c *TimerCollection) restoreBreak(b *BreakSnapshot) {
+	if b == nil || b.Index < 0 || b.Index >= len(c.timers) {
+		return
+	}
+	c.breakIndex = b.Index
+	c.breakAccrued = time.Duration(b.AccruedMs) * time.Millisecond
+	if b.OnBreak && b.PreBreakActive >= 0 && b.PreBreakActive < len(c.timers) {
+		c.onBreak = true
+		c.activeIndex = b.Index
+		c.preBreakActive = b.PreBreakActive
+		c.preBreakRunning = b.PreBreakRunning
+		c.breakStartRemaining = time.Duration(b.StartRemainingMs) * time.Millisecond
+	}
 }
 
 func restoreTimer(s TimerSnapshot, defaultDurationSecs uint64) *CountdownTimer {
@@ -619,7 +665,8 @@ func restoreTimer(s TimerSnapshot, defaultDurationSecs uint64) *CountdownTimer {
 
 // RestoreCollection rebuilds a TimerCollection from a snapshot. An empty or
 // invalid snapshot falls back to a fresh single-timer collection. Running
-// timers in the snapshot are revived as paused.
+// timers in the snapshot are revived as paused; break state, including a
+// break in progress, is revived as saved.
 func RestoreCollection(snap CollectionSnapshot, defaultDurationSecs uint64) *TimerCollection {
 	if len(snap.Timers) == 0 {
 		return NewCollection(defaultDurationSecs)
@@ -644,5 +691,7 @@ func RestoreCollection(snap CollectionSnapshot, defaultDurationSecs uint64) *Tim
 	if active < 0 || active >= len(ts) {
 		active = 0
 	}
-	return &TimerCollection{timers: ts, activeIndex: active, breakIndex: -1}
+	c := &TimerCollection{timers: ts, activeIndex: active, breakIndex: -1}
+	c.restoreBreak(snap.Break)
+	return c
 }

@@ -1,6 +1,7 @@
 package timer
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -973,5 +974,78 @@ func TestRestoreCollectionAutoAssignsUnsetTints(t *testing.T) {
 	}
 	if list[0].Tint == list[1].Tint {
 		t.Fatalf("expected distinct auto-assigned tints, both got %q", list[0].Tint)
+	}
+}
+
+// Which timer is the break timer, and how much break time has been earned,
+// must survive a restart — losing them silently forfeits break time the user
+// already accrued.
+func TestRestorePreservesBreakDesignationAndAccruedTime(t *testing.T) {
+	c := withDesignatedBreak(45 * time.Second)
+
+	r := RestoreCollection(c.Snapshot(), 300)
+
+	if r.BreakIndex() != 1 {
+		t.Fatalf("break designation lost: break index %d", r.BreakIndex())
+	}
+	if got := r.BreakAccrued(); got != 45*time.Second {
+		t.Fatalf("accrued break time lost: got %v", got)
+	}
+}
+
+// A restart in the middle of a break resumes that break where it stood: still
+// on break, the break time used so far still deducted, and ending it returns
+// to the timer that was interrupted (resuming it if it had been running), as
+// it would have without the restart.
+func TestRestorePreservesInProgressBreak(t *testing.T) {
+	c := withDesignatedBreak(30 * time.Second)
+	c.Active().Start()
+	if err := c.StartBreak(); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	remainingBreak := c.BreakAccrued()
+
+	r := RestoreCollection(c.Snapshot(), 300)
+
+	if !r.IsOnBreak() || r.ActiveIndex() != 1 {
+		t.Fatalf("break not restored: onBreak=%v active=%d", r.IsOnBreak(), r.ActiveIndex())
+	}
+	if diff := remainingBreak - r.BreakAccrued(); diff > 5*time.Millisecond || diff < -5*time.Millisecond {
+		t.Fatalf("break time used drifted: before %v, after %v", remainingBreak, r.BreakAccrued())
+	}
+	r.EndBreak()
+	if r.ActiveIndex() != 0 || r.TimerAt(0).StateName() != "running" {
+		t.Fatalf("ending break should resume the interrupted timer: active=%d state=%q",
+			r.ActiveIndex(), r.TimerAt(0).StateName())
+	}
+}
+
+// Snapshots saved before break state was persisted have no break fields; they
+// must restore with no break timer rather than defaulting timer 0 into one.
+func TestRestoreLegacySnapshotHasNoBreakTimer(t *testing.T) {
+	legacy := `{"timers":[{"name":"A","original_duration_ms":300000,"duration_ms":300000,"elapsed_ms":0,"state":"idle","tint":"rose"}],"active_index":0}`
+	var snap CollectionSnapshot
+	if err := json.Unmarshal([]byte(legacy), &snap); err != nil {
+		t.Fatal(err)
+	}
+	r := RestoreCollection(snap, 300)
+	if r.BreakIndex() != -1 || r.IsOnBreak() {
+		t.Fatalf("legacy snapshot grew a break timer: index %d onBreak %v", r.BreakIndex(), r.IsOnBreak())
+	}
+}
+
+// A hand-edited or stale snapshot naming a break timer that doesn't exist is
+// dropped rather than trusted, since every break operation indexes into the
+// timer list with it.
+func TestRestoreDropsOutOfRangeBreakIndex(t *testing.T) {
+	c := withDesignatedBreak(30 * time.Second)
+	snap := c.Snapshot()
+	snap.Timers = snap.Timers[:1]
+
+	r := RestoreCollection(snap, 300)
+	if r.BreakIndex() != -1 || r.IsOnBreak() || r.BreakAccrued() != 0 {
+		t.Fatalf("invalid break state kept: index %d onBreak %v accrued %v",
+			r.BreakIndex(), r.IsOnBreak(), r.BreakAccrued())
 	}
 }
